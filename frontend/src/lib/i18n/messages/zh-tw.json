@@ -3492,7 +3492,20 @@
       "empty": "暫無入站訊息。",
       "emptyHint": "配對手機收到訊息後，顧客的回覆將顯示在這裡。",
       "phoneCopied": "已複製 {phone}",
-      "title": "收件箱"
+      "title": "收件箱",
+      "colTakeover": "接手",
+      "takenBy": "由 {by} 接手",
+      "free": "未處理",
+      "releaseCta": "釋出",
+      "takeoverCta": "接手",
+      "replyPlaceholder": "輸入回覆…",
+      "sendReply": "傳送回覆",
+      "replySuccess": "已透過機器人的 WhatsApp 連線傳送回覆。",
+      "replyFailed": "無法確認回覆是否已傳送。請先檢查對話，再重試。",
+      "takeoverSuccess": "已接手對話。",
+      "takeoverFailed": "接手對話失敗。",
+      "releaseSuccess": "已釋出對話。",
+      "releaseFailed": "釋出對話失敗。"
     },
     "kind": {
       "auto_followup": "自動跟進",

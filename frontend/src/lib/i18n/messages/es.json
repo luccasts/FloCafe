@@ -3492,7 +3492,20 @@
       "empty": "Todavía no hay mensajes entrantes.",
       "emptyHint": "Las respuestas de los clientes aparecen acá cuando el teléfono emparejado reciba mensajes.",
       "phoneCopied": "{phone} copiado",
-      "title": "Bandeja de entrada"
+      "title": "Bandeja de entrada",
+      "colTakeover": "Toma de control",
+      "takenBy": "Tomada por {by}",
+      "free": "Libre",
+      "releaseCta": "Liberar",
+      "takeoverCta": "Tomar el control",
+      "replyPlaceholder": "Escribe una respuesta…",
+      "sendReply": "Enviar respuesta",
+      "replySuccess": "Respuesta enviada mediante la conexión de WhatsApp del bot.",
+      "replyFailed": "No se pudo confirmar la respuesta. Comprueba la conversación antes de volver a intentarlo.",
+      "takeoverSuccess": "Conversación tomada.",
+      "takeoverFailed": "No se pudo tomar el control de la conversación.",
+      "releaseSuccess": "Conversación liberada.",
+      "releaseFailed": "No se pudo liberar la conversación."
     },
     "kind": {
       "auto_followup": "Seguimiento automático",

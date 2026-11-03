@@ -3492,7 +3492,20 @@
       "empty": "Nenhuma mensagem recebida ainda.",
       "emptyHint": "As respostas dos clientes aparecerão aqui assim que um telefone pareado receber mensagens.",
       "phoneCopied": "{phone} copiado",
-      "title": "Caixa de Entrada"
+      "title": "Caixa de Entrada",
+      "colTakeover": "Controle",
+      "takenBy": "Assumida por {by}",
+      "free": "Livre",
+      "releaseCta": "Liberar",
+      "takeoverCta": "Assumir",
+      "replyPlaceholder": "Digite uma resposta…",
+      "sendReply": "Enviar resposta",
+      "replySuccess": "Resposta enviada pela conexão WhatsApp do bot.",
+      "replyFailed": "Não foi possível confirmar o envio. Confira a conversa antes de tentar novamente.",
+      "takeoverSuccess": "Conversa assumida.",
+      "takeoverFailed": "Não foi possível assumir a conversa.",
+      "releaseSuccess": "Conversa liberada.",
+      "releaseFailed": "Não foi possível liberar a conversa."
     },
     "kind": {
       "auto_followup": "Acompanhamento automático",

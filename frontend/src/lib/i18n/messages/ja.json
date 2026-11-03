@@ -3492,7 +3492,20 @@
       "empty": "受信メッセージはまだありません。",
       "emptyHint": "ペアリングした電話がメッセージを受信すると、顧客の返信がここに表示されます。",
       "phoneCopied": "{phone}をコピーしました",
-      "title": "受信トレイ"
+      "title": "受信トレイ",
+      "colTakeover": "対応担当",
+      "takenBy": "{by} が対応中",
+      "free": "未対応",
+      "releaseCta": "対応を解除",
+      "takeoverCta": "対応を引き継ぐ",
+      "replyPlaceholder": "返信を入力…",
+      "sendReply": "返信を送信",
+      "replySuccess": "ボットのWhatsApp接続を通じて返信を送信しました。",
+      "replyFailed": "返信を確認できませんでした。再試行する前に会話を確認してください。",
+      "takeoverSuccess": "会話を引き継ぎました。",
+      "takeoverFailed": "会話を引き継げませんでした。",
+      "releaseSuccess": "会話の対応を解除しました。",
+      "releaseFailed": "会話の対応を解除できませんでした。"
     },
     "kind": {
       "auto_followup": "自動フォローアップ",

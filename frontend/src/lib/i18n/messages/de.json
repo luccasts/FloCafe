@@ -3492,7 +3492,20 @@
       "empty": "Noch keine eingehenden Nachrichten vorhanden.",
       "emptyHint": "Kundenantworten erscheinen hier, sobald das gekoppelte Smartphone Nachrichten empfängt.",
       "phoneCopied": "{phone} kopiert",
-      "title": "Posteingang"
+      "title": "Posteingang",
+      "colTakeover": "Übernahme",
+      "takenBy": "Übernommen von {by}",
+      "free": "Frei",
+      "releaseCta": "Freigeben",
+      "takeoverCta": "Übernehmen",
+      "replyPlaceholder": "Antwort eingeben…",
+      "sendReply": "Antwort senden",
+      "replySuccess": "Antwort über die WhatsApp-Verbindung des Bots gesendet.",
+      "replyFailed": "Die Antwort konnte nicht bestätigt werden. Prüfe die Unterhaltung, bevor du es erneut versuchst.",
+      "takeoverSuccess": "Unterhaltung übernommen.",
+      "takeoverFailed": "Unterhaltung konnte nicht übernommen werden.",
+      "releaseSuccess": "Unterhaltung freigegeben.",
+      "releaseFailed": "Unterhaltung konnte nicht freigegeben werden."
     },
     "kind": {
       "auto_followup": "Automatische Nachverfolgung",

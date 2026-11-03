@@ -3492,7 +3492,20 @@
       "empty": "Belum ada pesan masuk.",
       "emptyHint": "Balasan pelanggan akan muncul di sini setelah telepon yang dipasangkan menerima pesan.",
       "phoneCopied": "{phone} disalin",
-      "title": "Kotak masuk"
+      "title": "Kotak masuk",
+      "colTakeover": "Pengambilalihan",
+      "takenBy": "Diambil alih oleh {by}",
+      "free": "Bebas",
+      "releaseCta": "Lepaskan",
+      "takeoverCta": "Ambil alih",
+      "replyPlaceholder": "Ketik balasan…",
+      "sendReply": "Kirim balasan",
+      "replySuccess": "Balasan dikirim melalui koneksi WhatsApp bot.",
+      "replyFailed": "Balasan tidak dapat dikonfirmasi. Periksa percakapan sebelum mencoba lagi.",
+      "takeoverSuccess": "Percakapan berhasil diambil alih.",
+      "takeoverFailed": "Gagal mengambil alih percakapan.",
+      "releaseSuccess": "Percakapan berhasil dilepaskan.",
+      "releaseFailed": "Gagal melepaskan percakapan."
     },
     "kind": {
       "auto_followup": "Tindak lanjut otomatis",

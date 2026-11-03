@@ -3492,7 +3492,20 @@
       "empty": "Chưa có tin nhắn đến.",
       "emptyHint": "Câu trả lời của khách hàng sẽ xuất hiện tại đây khi điện thoại đã ghép nối nhận được tin nhắn.",
       "phoneCopied": "Đã sao chép {phone}",
-      "title": "Hộp thư đến"
+      "title": "Hộp thư đến",
+      "colTakeover": "Tiếp quản",
+      "takenBy": "Được tiếp quản bởi {by}",
+      "free": "Đang trống",
+      "releaseCta": "Bàn giao",
+      "takeoverCta": "Tiếp quản",
+      "replyPlaceholder": "Nhập câu trả lời…",
+      "sendReply": "Gửi câu trả lời",
+      "replySuccess": "Đã gửi câu trả lời qua kết nối WhatsApp của bot.",
+      "replyFailed": "Không thể xác nhận câu trả lời. Hãy kiểm tra cuộc trò chuyện trước khi thử lại.",
+      "takeoverSuccess": "Đã tiếp quản cuộc trò chuyện.",
+      "takeoverFailed": "Không thể tiếp quản cuộc trò chuyện.",
+      "releaseSuccess": "Đã bàn giao cuộc trò chuyện.",
+      "releaseFailed": "Không thể bàn giao cuộc trò chuyện."
     },
     "kind": {
       "auto_followup": "Tự động liên hệ lại",

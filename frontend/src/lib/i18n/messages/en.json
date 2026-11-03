@@ -3492,7 +3492,20 @@
       "empty": "No inbound messages yet.",
       "emptyHint": "Customer replies will appear here once a paired phone receives messages.",
       "phoneCopied": "{phone} copied",
-      "title": "Inbox"
+      "title": "Inbox",
+      "colTakeover": "Takeover",
+      "takenBy": "Taken by {by}",
+      "free": "Free",
+      "releaseCta": "Release",
+      "takeoverCta": "Take over",
+      "replyPlaceholder": "Type a reply…",
+      "sendReply": "Send reply",
+      "replySuccess": "Reply sent via the bot’s WhatsApp connection.",
+      "replyFailed": "Could not confirm the reply. Check the conversation before trying again.",
+      "takeoverSuccess": "Conversation taken over.",
+      "takeoverFailed": "Failed to take over conversation.",
+      "releaseSuccess": "Conversation released.",
+      "releaseFailed": "Failed to release conversation."
     },
     "kind": {
       "auto_followup": "Auto follow-up",

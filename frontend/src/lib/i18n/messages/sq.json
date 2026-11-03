@@ -3492,7 +3492,20 @@
       "empty": "Nuk ka ende mesazhe hyrëse.",
       "emptyHint": "Përgjigjet e klientit do të shfaqen këtu sapo një telefon i çiftuar të marrë mesazhe.",
       "phoneCopied": "{phone} u kopjua",
-      "title": "Të ardhura"
+      "title": "Të ardhura",
+      "colTakeover": "Marrja në kontroll",
+      "takenBy": "Marrë në kontroll nga {by}",
+      "free": "E lirë",
+      "releaseCta": "Liro",
+      "takeoverCta": "Merr në kontroll",
+      "replyPlaceholder": "Shkruani një përgjigje…",
+      "sendReply": "Dërgo përgjigjen",
+      "replySuccess": "Përgjigjja u dërgua përmes lidhjes WhatsApp të botit.",
+      "replyFailed": "Nuk u konfirmua dot përgjigjja. Kontrolloni bisedën para se të provoni përsëri.",
+      "takeoverSuccess": "Biseda u mor në kontroll.",
+      "takeoverFailed": "Marrja në kontroll e bisedës dështoi.",
+      "releaseSuccess": "Biseda u lirua.",
+      "releaseFailed": "Lirimi i bisedës dështoi."
     },
     "kind": {
       "auto_followup": "Ndjekja automatike",

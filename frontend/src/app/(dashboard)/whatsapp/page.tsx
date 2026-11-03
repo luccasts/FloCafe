@@ -31,6 +31,7 @@ import {
   ShieldCheck,
   Radio,
   RotateCcw,
+  UserCheck,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Link from 'next/link';
@@ -139,6 +140,8 @@ interface InboxMessage {
   body: string;
   status: string;
   queued_at: string;
+  takeover_state?: 'free' | 'taken';
+  takeover_taken_by?: string | null;
 }
 
 interface BlocklistRow {
@@ -312,6 +315,8 @@ export default function WhatsAppPage() {
   const [sentMessages, setSentMessages] = useState<SentMessage[]>([]);
   const [retryingIds, setRetryingIds] = useState<Set<number>>(() => new Set());
   const [inbox, setInbox] = useState<InboxMessage[]>([]);
+  const [replyDrafts, setReplyDrafts] = useState<Record<number, string>>({});
+  const [sendingReplyId, setSendingReplyId] = useState<number | null>(null);
   const [blocklist, setBlocklist] = useState<BlocklistRow[]>([]);
   const [blockPhone, setBlockPhone] = useState('');
   const [blockReason, setBlockReason] = useState('');
@@ -433,9 +438,10 @@ export default function WhatsAppPage() {
     const id = setInterval(() => {
       void refreshStatus();
       void refreshSent();
+      if (isAdmin) void refreshInbox();
     }, 5000);
     return () => clearInterval(id);
-  }, [refreshStatus, refreshSent]);
+  }, [isAdmin, refreshInbox, refreshStatus, refreshSent]);
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -724,6 +730,42 @@ export default function WhatsAppPage() {
       toast.success(tBlocklist('fromInboxSuccess', { phone }));
     } catch (err) {
       toastApiError(err, tBlocklist('failed'), tApiError);
+    }
+  };
+
+  const takeConversation = async (phone: string) => {
+    try {
+      await api.post(`/whatsapp/takeover/${encodeURIComponent(phone)}`);
+      toast.success(tInbox('takeoverSuccess'));
+      await refreshInbox();
+    } catch (err) {
+      toastApiError(err, tInbox('takeoverFailed'), tApiError);
+    }
+  };
+
+  const releaseConversation = async (phone: string) => {
+    try {
+      await api.post(`/whatsapp/release/${encodeURIComponent(phone)}`);
+      toast.success(tInbox('releaseSuccess'));
+      await refreshInbox();
+    } catch (err) {
+      toastApiError(err, tInbox('releaseFailed'), tApiError);
+    }
+  };
+
+  const sendInboxReply = async (messageId: number) => {
+    const body = replyDrafts[messageId]?.trim();
+    if (!body || sendingReplyId !== null) return;
+    setSendingReplyId(messageId);
+    try {
+      await api.post(`/whatsapp/inbox/${messageId}/reply`, { body });
+      setReplyDrafts((current) => ({ ...current, [messageId]: '' }));
+      toast.success(tInbox('replySuccess'));
+      await refreshInbox();
+    } catch (err) {
+      toastApiError(err, tInbox('replyFailed'), tApiError);
+    } finally {
+      setSendingReplyId(null);
     }
   };
 
@@ -1320,12 +1362,14 @@ export default function WhatsAppPage() {
                           <TableHead>{tSent('colWhen')}</TableHead>
                           <TableHead>{tSent('colPhone')}</TableHead>
                           <TableHead>{tSent('colBody')}</TableHead>
+                          <TableHead>{tInbox('colTakeover')}</TableHead>
                           <TableHead></TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {inbox.map((m) => {
                           const isBlocked = blocklist.some((b) => b.phone_e164 === m.phone_e164);
+                          const isTaken = m.takeover_state === 'taken';
                           return (
                             <TableRow key={m.id}>
                               <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
@@ -1344,19 +1388,89 @@ export default function WhatsAppPage() {
                               </TableCell>
                               <TableCell className="text-sm whitespace-pre-line break-words max-w-md">
                                 {m.body}
+                                {isTaken && (
+                                  <div className="mt-2 flex items-center gap-2">
+                                    <Input
+                                      value={replyDrafts[m.id] ?? ''}
+                                      maxLength={4096}
+                                      placeholder={tInbox('replyPlaceholder')}
+                                      aria-label={tInbox('replyPlaceholder')}
+                                      disabled={sendingReplyId !== null}
+                                      onChange={(event) =>
+                                        setReplyDrafts((current) => ({
+                                          ...current,
+                                          [m.id]: event.target.value,
+                                        }))
+                                      }
+                                      onKeyDown={(event) => {
+                                        if (event.key === 'Enter') {
+                                          event.preventDefault();
+                                          void sendInboxReply(m.id);
+                                        }
+                                      }}
+                                    />
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      aria-label={tInbox('sendReply')}
+                                      disabled={
+                                        !replyDrafts[m.id]?.trim() || sendingReplyId !== null
+                                      }
+                                      onClick={() => void sendInboxReply(m.id)}
+                                    >
+                                      {sendingReplyId === m.id ? (
+                                        <Loader2 className="size-3 animate-spin" />
+                                      ) : (
+                                        <Send className="size-3" />
+                                      )}
+                                      <span className="sr-only">{tInbox('sendReply')}</span>
+                                    </Button>
+                                  </div>
+                                )}
                               </TableCell>
                               <TableCell>
-                                {isBlocked ? (
-                                  <Badge variant="secondary">{tInbox('blocked')}</Badge>
-                                ) : (
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => blockFromInbox(m.phone_e164)}
+                                {isTaken ? (
+                                  <Badge
+                                    variant="secondary"
+                                    className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
                                   >
-                                    <Ban className="size-3" /> {tInbox('blockCta')}
-                                  </Button>
+                                    {tInbox('takenBy', { by: m.takeover_taken_by ?? '—' })}
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="outline">{tInbox('free')}</Badge>
                                 )}
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-2">
+                                  {isTaken ? (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => releaseConversation(m.phone_e164)}
+                                    >
+                                      <RotateCcw className="size-3" /> {tInbox('releaseCta')}
+                                    </Button>
+                                  ) : (
+                                    <Button
+                                      size="sm"
+                                      variant="default"
+                                      onClick={() => takeConversation(m.phone_e164)}
+                                    >
+                                      <UserCheck className="size-3" /> {tInbox('takeoverCta')}
+                                    </Button>
+                                  )}
+                                  {isBlocked ? (
+                                    <Badge variant="secondary">{tInbox('blocked')}</Badge>
+                                  ) : (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => blockFromInbox(m.phone_e164)}
+                                    >
+                                      <Ban className="size-3" /> {tInbox('blockCta')}
+                                    </Button>
+                                  )}
+                                </div>
                               </TableCell>
                             </TableRow>
                           );

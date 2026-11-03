@@ -3492,7 +3492,20 @@
       "empty": "暂无入站消息。",
       "emptyHint": "配对手机收到消息后，顾客的回复将显示在这里。",
       "phoneCopied": "已复制 {phone}",
-      "title": "收件箱"
+      "title": "收件箱",
+      "colTakeover": "接管",
+      "takenBy": "由 {by} 接管",
+      "free": "空闲",
+      "releaseCta": "释放",
+      "takeoverCta": "接管",
+      "replyPlaceholder": "输入回复…",
+      "sendReply": "发送回复",
+      "replySuccess": "已通过机器人的 WhatsApp 连接发送回复。",
+      "replyFailed": "无法确认回复是否发送。请先检查对话，再重试。",
+      "takeoverSuccess": "已接管对话。",
+      "takeoverFailed": "接管对话失败。",
+      "releaseSuccess": "已释放对话。",
+      "releaseFailed": "释放对话失败。"
     },
     "kind": {
       "auto_followup": "自动跟进",

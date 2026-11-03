@@ -3492,7 +3492,20 @@
       "empty": "Nog geen inkomende berichten.",
       "emptyHint": "Klantantwoorden verschijnen hier zodra een gekoppelde telefoon berichten ontvangt.",
       "phoneCopied": "{phone} gekopieerd",
-      "title": "Inbox"
+      "title": "Inbox",
+      "colTakeover": "Overname",
+      "takenBy": "Overgenomen door {by}",
+      "free": "Vrij",
+      "releaseCta": "Vrijgeven",
+      "takeoverCta": "Overnemen",
+      "replyPlaceholder": "Typ een antwoord…",
+      "sendReply": "Antwoord verzenden",
+      "replySuccess": "Antwoord verzonden via de WhatsApp-verbinding van de bot.",
+      "replyFailed": "Het antwoord kon niet worden bevestigd. Controleer het gesprek voordat je het opnieuw probeert.",
+      "takeoverSuccess": "Gesprek overgenomen.",
+      "takeoverFailed": "Gesprek overnemen is mislukt.",
+      "releaseSuccess": "Gesprek vrijgegeven.",
+      "releaseFailed": "Gesprek vrijgeven is mislukt."
     },
     "kind": {
       "auto_followup": "Automatische opvolging",

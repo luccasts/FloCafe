@@ -3492,7 +3492,20 @@
       "empty": "Walang mga mensahe sa inbox.",
       "emptyHint": "Lalabas dito ang mga tugon ng customer kapag nakatanggap ng mga mensahe ang nakapares na telepono.",
       "phoneCopied": "Nakopya ang {phone}",
-      "title": "Inbox ng WhatsApp"
+      "title": "Inbox ng WhatsApp",
+      "colTakeover": "Pagkuha ng usapan",
+      "takenBy": "Kinuha ni {by}",
+      "free": "Walang may hawak",
+      "releaseCta": "Bitawan",
+      "takeoverCta": "Kunin",
+      "replyPlaceholder": "Mag-type ng tugon…",
+      "sendReply": "Ipadala ang tugon",
+      "replySuccess": "Naipadala ang tugon gamit ang koneksyon ng WhatsApp ng bot.",
+      "replyFailed": "Hindi makumpirma ang tugon. Suriin ang usapan bago subukang muli.",
+      "takeoverSuccess": "Nakuha na ang usapan.",
+      "takeoverFailed": "Hindi makuha ang usapan.",
+      "releaseSuccess": "Binitiwan na ang usapan.",
+      "releaseFailed": "Hindi mabitawan ang usapan."
     },
     "kind": {
       "auto_followup": "Awtomatikong follow-up",

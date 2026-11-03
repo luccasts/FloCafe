@@ -3492,7 +3492,20 @@
       "empty": "Henüz gelen mesaj yok.",
       "emptyHint": "Bağlı telefonunuza müşteri yanıtları geldikçe burada listelenecektir.",
       "phoneCopied": "{phone} panoya kopyalandı",
-      "title": "Gelen Kutusu"
+      "title": "Gelen Kutusu",
+      "colTakeover": "Devralma",
+      "takenBy": "{by} tarafından alındı",
+      "free": "Boşta",
+      "releaseCta": "Bırak",
+      "takeoverCta": "Devral",
+      "replyPlaceholder": "Yanıt yazın…",
+      "sendReply": "Yanıt gönder",
+      "replySuccess": "Yanıt, botun WhatsApp bağlantısı üzerinden gönderildi.",
+      "replyFailed": "Yanıt gönderimi doğrulanamadı. Tekrar denemeden önce konuşmayı kontrol edin.",
+      "takeoverSuccess": "Konuşma devralındı.",
+      "takeoverFailed": "Konuşma devralınamadı.",
+      "releaseSuccess": "Konuşma bırakıldı.",
+      "releaseFailed": "Konuşma bırakılamadı."
     },
     "kind": {
       "auto_followup": "Otomatik Takip",

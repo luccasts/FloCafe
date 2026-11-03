@@ -3492,7 +3492,20 @@
       "empty": "아직 수신된 메시지가 없습니다.",
       "emptyHint": "페어링된 폰이 메시지를 받으면 고객 답변이 여기에 표시됩니다.",
       "phoneCopied": "{phone} 복사됨",
-      "title": "수신함"
+      "title": "수신함",
+      "colTakeover": "담당자 지정",
+      "takenBy": "{by}님이 담당 중",
+      "free": "대기 중",
+      "releaseCta": "담당 해제",
+      "takeoverCta": "대화 맡기",
+      "replyPlaceholder": "답장을 입력하세요…",
+      "sendReply": "답장 보내기",
+      "replySuccess": "봇의 WhatsApp 연결을 통해 답장을 보냈습니다.",
+      "replyFailed": "답장을 확인할 수 없습니다. 다시 시도하기 전에 대화를 확인하세요.",
+      "takeoverSuccess": "대화를 맡았습니다.",
+      "takeoverFailed": "대화를 맡지 못했습니다.",
+      "releaseSuccess": "대화 담당을 해제했습니다.",
+      "releaseFailed": "대화 담당을 해제하지 못했습니다."
     },
     "kind": {
       "auto_followup": "자동 후속 메시지",
