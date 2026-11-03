@@ -1,4 +1,6 @@
-import { Router, Request, Response } from 'express';
+import { ingestWhatsAppMessage } from '../whatsapp-inbox-ingestion';
+import { Router, Request, Response, NextFunction } from 'express';
+import { requireWhatsAppServiceKey } from '../middleware/whatsapp-service-auth';
 import { hasPermission, requirePermission } from '../services/authorization';
 import { asyncHandler } from '../middleware/async-handler';
 import { getDatabase, getSettingValue, upsertSettings } from '../db';
@@ -7,6 +9,7 @@ import { getHttpRequestSignal, trackHttpRequestWork } from '../shutdown';
 import * as whatsapp from '../services/whatsapp';
 import * as QRCode from 'qrcode';
 import { parsePhoneE164 } from '../lib/phone';
+import { sendHumanReplyToWhatsAppBot, WhatsAppBotReplyError } from '../whatsapp-bot-reply';
 
 const router = Router();
 
@@ -467,8 +470,15 @@ router.post(
   requirePermission('whatsapp.manage'),
   asyncHandler(async (req, res) => {
     const { body } = req.body ?? {};
-    if (!body || typeof body !== 'string') {
+    if (typeof body !== 'string') {
       res.status(400).json({ error: 'body required', reason: 'body_required' });
+      return;
+    }
+    const text = body.trim();
+    if (!text || text.length > 4096) {
+      res
+        .status(400)
+        .json({ error: 'body must contain 1–4096 characters', reason: 'body_required' });
       return;
     }
     const db = getDatabase();
@@ -479,31 +489,79 @@ router.post(
       res.status(404).json({ error: 'inbound message not found', reason: 'inbound_not_found' });
       return;
     }
-    const userId = (req as any).user?.userId ?? null;
-    const result = await trackHttpRequestWork(
-      req,
-      whatsapp.sendMessage({
-        phoneE164: msg.phone_e164,
-        body: String(body),
-        billId: null,
-        customerId: null,
-        kind: 'manual_reply',
-        userId,
-        signal: getHttpRequestSignal(req),
-      }),
-    );
-    if (!result.ok) {
-      const status =
-        result.reason === 'not_connected' ||
-        result.reason === 'cooldown' ||
-        result.reason === 'offline_mode'
-          ? 503
-          : 400;
-      res.status(status).json({ error: result.error, reason: result.reason });
+    if (whatsapp.getTakeoverState(msg.phone_e164).state !== 'taken') {
+      res.status(409).json({
+        error: 'conversation must be taken over before replying',
+        reason: 'conversation_not_taken',
+      });
       return;
     }
-    res.json({ ok: true, messageId: result.messageId });
+
+    try {
+      await trackHttpRequestWork(req, sendHumanReplyToWhatsAppBot(msg.phone_e164, text));
+    } catch (error) {
+      const configurationError =
+        error instanceof WhatsAppBotReplyError && error.code !== 'callback_failed';
+      res.status(configurationError ? 503 : 502).json({
+        error: configurationError
+          ? 'WhatsApp bot reply transport is not configured correctly'
+          : 'WhatsApp bot could not confirm the reply',
+        reason: configurationError ? 'bot_reply_not_configured' : 'bot_reply_failed',
+      });
+      return;
+    }
+    res.json({ ok: true });
   }),
+);
+
+router.post(
+  '/takeover/:phone',
+  requirePermission('whatsapp.manage'),
+  asyncHandler(async (req: Request, res: Response) => {
+    const tenantCountry = getSettingValue('country') || '';
+    const parsed = parsePhoneE164(String(req.params.phone), tenantCountry);
+    if (!parsed) {
+      res.status(400).json({ error: 'Valid phone_e164 required', reason: 'invalid_phone' });
+      return;
+    }
+    const userId = (req as any).user?.userId ?? 'unknown';
+    whatsapp.takeConversation(parsed.e164, userId);
+    res.json({ ok: true });
+  }),
+);
+
+router.post(
+  '/release/:phone',
+  requirePermission('whatsapp.manage'),
+  asyncHandler(async (req: Request, res: Response) => {
+    const tenantCountry = getSettingValue('country') || '';
+    const parsed = parsePhoneE164(String(req.params.phone), tenantCountry);
+    if (!parsed) {
+      res.status(400).json({ error: 'Valid phone_e164 required', reason: 'invalid_phone' });
+      return;
+    }
+    const userId = (req as any).user?.userId ?? 'unknown';
+    whatsapp.releaseConversation(parsed.e164, userId);
+    res.json({ ok: true });
+  }),
+);
+
+router.get(
+  '/takeover/:phone',
+  (req: Request, res: Response, next: NextFunction) => {
+    if (res.locals.whatsappTakeoverServiceAuthorized === true) return next();
+    return requirePermission('whatsapp.manage')(req, res, next);
+  },
+  (req: Request, res: Response) => {
+    const tenantCountry = getSettingValue('country') || '';
+    const parsed = parsePhoneE164(String(req.params.phone), tenantCountry);
+    if (!parsed) {
+      res.status(400).json({ error: 'Valid phone_e164 required', reason: 'invalid_phone' });
+      return;
+    }
+    const state = whatsapp.getTakeoverState(parsed.e164);
+    res.json(state);
+  },
 );
 
 router.get('/blocklist', requirePermission('whatsapp.manage'), (_req: Request, res: Response) => {
@@ -534,6 +592,15 @@ router.delete(
     }
     res.json({ ok: true });
   },
+);
+
+router.post(
+  '/inbound',
+  requireWhatsAppServiceKey,
+  asyncHandler(async (req: Request, res: Response) => {
+    const result = ingestWhatsAppMessage(req.body);
+    res.status(result.status).json(result.body);
+  }),
 );
 
 export const whatsappRoutes = router;

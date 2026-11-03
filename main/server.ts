@@ -10,6 +10,11 @@ import {
 import * as path from 'path';
 import * as fs from 'fs';
 import jwt from 'jsonwebtoken';
+import {
+  isWhatsAppInboundRequest,
+  isWhatsAppTakeoverStateRequest,
+  requireWhatsAppServiceKey,
+} from './middleware/whatsapp-service-auth';
 import { registerRoutes } from './routes';
 import { getJWTSecret } from './security/jwt-secret';
 import {
@@ -94,6 +99,13 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
     /^\/api\/support-ticket\/pre-login\/[0-9a-f-]{36}\/status$/i.test(reqPath)
   ) {
     next();
+    return;
+  }
+  if (
+    isWhatsAppInboundRequest(req) ||
+    (isWhatsAppTakeoverStateRequest(req) && !req.headers.authorization)
+  ) {
+    requireWhatsAppServiceKey(req, res, next);
     return;
   }
 

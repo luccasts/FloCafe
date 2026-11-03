@@ -217,7 +217,10 @@ export type MessageKind =
   | 'manual_reply'
   | 'auto_followup'
   | 'z_report'
-  | 'daily_sales_report';
+  | 'daily_sales_report'
+  | 'user_message'
+  | 'bot_reply'
+  | 'agent_reply';
 
 export function isReportMessageKind(kind: unknown): kind is ReportMessageKind {
   return kind === 'z_report' || kind === 'daily_sales_report';
@@ -789,7 +792,7 @@ function triggerCooldown(
   }, durationMs);
 }
 
-function recordMessageRow(row: {
+export function recordMessageRow(row: {
   phone_e164: string;
   direction: 'inbound' | 'outbound';
   kind: QueuedSend['kind'];
@@ -2709,15 +2712,20 @@ export interface InboxMessage {
   body: string;
   status: string;
   queued_at: string;
+  takeover_state: 'free' | 'taken';
+  takeover_taken_by: string | null;
 }
 
 export function listInbox(limit: number, offset: number): InboxMessage[] {
   return getDatabase()
     .prepare(`
-    SELECT id, phone_e164, body, status, queued_at
-    FROM whatsapp_messages
-    WHERE direction = 'inbound'
-    ORDER BY queued_at DESC
+    SELECT m.id, m.phone_e164, m.body, m.status, m.queued_at,
+      COALESCE(t.state, 'free') AS takeover_state,
+      t.taken_by AS takeover_taken_by
+    FROM whatsapp_messages m
+    LEFT JOIN conversation_takeover t ON t.phone_e164 = m.phone_e164
+    WHERE m.direction = 'inbound'
+    ORDER BY m.queued_at DESC
     LIMIT ? OFFSET ?
   `)
     .all(limit, offset) as InboxMessage[];
@@ -2827,6 +2835,50 @@ export function removeFromBlocklist(phoneE164: string): boolean {
     .prepare('DELETE FROM whatsapp_blocklist WHERE phone_e164 = ?')
     .run(phoneE164);
   return result.changes > 0;
+}
+
+export interface TakeoverState {
+  state: 'free' | 'taken';
+  takenBy?: string;
+  takenAt?: string;
+  releasedBy?: string;
+  releasedAt?: string;
+}
+
+export function getTakeoverState(phoneE164: string): TakeoverState {
+  const row = getDatabase()
+    .prepare('SELECT state, taken_by, taken_at, released_by, released_at FROM conversation_takeover WHERE phone_e164 = ?')
+    .get(phoneE164) as
+    | { state: 'free' | 'taken'; taken_by: string | null; taken_at: string | null; released_by: string | null; released_at: string | null }
+    | undefined;
+  if (!row) return { state: 'free' };
+  return {
+    state: row.state,
+    takenBy: row.taken_by ?? undefined,
+    takenAt: row.taken_at ?? undefined,
+    releasedBy: row.released_by ?? undefined,
+    releasedAt: row.released_at ?? undefined,
+  };
+}
+
+export function takeConversation(phoneE164: string, takenBy: string): void {
+  getDatabase()
+    .prepare(`
+    INSERT INTO conversation_takeover (phone_e164, state, taken_by, taken_at)
+    VALUES (?, 'taken', ?, ?)
+    ON CONFLICT(phone_e164) DO UPDATE SET state = 'taken', taken_by = ?, taken_at = ?, released_by = NULL, released_at = NULL
+  `)
+    .run(phoneE164, takenBy, now(), takenBy, now());
+}
+
+export function releaseConversation(phoneE164: string, releasedBy: string): void {
+  getDatabase()
+    .prepare(`
+    INSERT INTO conversation_takeover (phone_e164, state, released_by, released_at)
+    VALUES (?, 'free', ?, ?)
+    ON CONFLICT(phone_e164) DO UPDATE SET state = 'free', released_by = ?, released_at = ?
+  `)
+    .run(phoneE164, releasedBy, now(), releasedBy, now());
 }
 
 export function roundLoyaltyAmount(value: unknown, fractionDigits?: number): number {

@@ -1,4 +1,5 @@
 import Database from 'better-sqlite3';
+import { migrateWhatsAppInbox } from './whatsapp-inbox-migration';
 import type { Request, Response, NextFunction } from 'express';
 import * as path from 'path';
 import * as os from 'os';
@@ -10164,6 +10165,27 @@ export const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
       insertSettingIfMissing('multi_counter_enabled', 'false');
     },
   },
+  {
+    version: 125,
+    name: 'add_conversation_takeover',
+    up: () => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS conversation_takeover (
+          phone_e164 TEXT PRIMARY KEY,
+          state TEXT NOT NULL CHECK (state IN ('free', 'taken')),
+          taken_by TEXT,
+          taken_at TEXT,
+          released_by TEXT,
+          released_at TEXT
+        );
+      `);
+    },
+  },
+  {
+    version: 126,
+    name: 'whatsapp_external_inbox_contract',
+    up: () => migrateWhatsAppInbox(db),
+  },
 ];
 
 export function backfillWhatsAppMessageAttempts(
@@ -11319,9 +11341,9 @@ export function generateBillNumber(): string {
   );
 }
 
-export function now(): string {
+export function now(date: Date = new Date()): string {
   // Returns SQLite CURRENT_TIMESTAMP format (`YYYY-MM-DD HH:MM:SS`, UTC).
-  return new Date().toISOString().replace('T', ' ').replace(/\..*$/, '');
+  return date.toISOString().replace('T', ' ').replace(/\..*$/, '');
 }
 
 /** Records who performed an order/item mutation (docs/reference/product-invariants.md). */
