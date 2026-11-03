@@ -49,6 +49,7 @@ Contracts a caller must satisfy. Looked up, not read through.
 | Page | Subject |
 | --- | --- |
 | [api.md](reference/api.md) | Endpoint reference for the three servers, and the KDS WebSocket contract. |
+| [whatsapp-bot-integration.md](reference/whatsapp-bot-integration.md) | Boundary and missing contract for integrating the external WhatsApp bot with FloCafe's inbox. |
 | [product-invariants.md](reference/product-invariants.md) | The deliberate product rules, each with where it is enforced and how to verify it. |
 | [roles-and-permissions.md](reference/roles-and-permissions.md) | The in-app UI capability matrix. Not the authorization reference; see the architecture page. |
 | [tax-packs.md](reference/tax-packs.md) | The `CountryPack` schema, the trust model, and the install path. |
