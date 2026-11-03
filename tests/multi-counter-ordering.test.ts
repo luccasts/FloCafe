@@ -90,6 +90,7 @@ const {
 } = require('./helpers/test-setup');
 const { getJWTSecret } = require('../main/routes/auth');
 const { validateInventoryLedgerDatabase } = require('../main/db');
+const { sweepDueScheduledOrders } = require('../main/services/scheduled-orders');
 
 function seedStaffUser(db: any, id: string, role: string, pin?: string) {
   const email = `${id}@test.local`;
@@ -120,6 +121,7 @@ const { stopScheduledOrderSweep } = require('../main/services/scheduled-orders')
 const { resetPinRateLimitForTests } = require('../main/routes/orders');
 const { registerRoutes } = require('../main/routes/index');
 const { stopKdsServer } = require('../main/kds-server');
+const { escPosToText } = require('../main/printers/thermal');
 
 function adjustStock(
   db: any,
@@ -158,8 +160,48 @@ function assertLedgerReconciles(db: any, label: string) {
   );
 }
 
+function getTimezoneOffsetMs(date: Date, timezone: string): number {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date);
+  const get = (t: string) => Number(parts.find((p) => p.type === t)?.value);
+  const hour = get('hour') === 24 ? 0 : get('hour');
+  const local = Date.UTC(
+    get('year'),
+    get('month') - 1,
+    get('day'),
+    hour,
+    get('minute'),
+    get('second'),
+  );
+  return local - date.getTime();
+}
+
+function hasDstTransitionInWindow(timezone: string, startMs: number, windowMs: number): boolean {
+  try {
+    return (
+      getTimezoneOffsetMs(new Date(startMs), timezone) !==
+      getTimezoneOffsetMs(new Date(startMs + windowMs), timezone)
+    );
+  } catch {
+    return false;
+  }
+}
+
 function futureWallClockInZone(timezone: string, offsetMinutes: number): string {
-  const target = new Date(Date.now() + offsetMinutes * 60 * 1000);
+  const nowMs = Date.now();
+  let baseMs = nowMs;
+  if (hasDstTransitionInWindow(timezone, nowMs, 24 * 60 * 60 * 1000)) {
+    baseMs += 24 * 60 * 60 * 1000;
+  }
+  const target = new Date(baseMs + offsetMinutes * 60 * 1000);
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: timezone,
     hour12: false,
@@ -248,6 +290,89 @@ async function main() {
     // 1. Settings: multi_counter_enabled toggle
     // -------------------------------------------------------------------------
     console.log('\n--- 1. Multi-counter Settings Toggle ---');
+
+    const disabledSetting = await req({
+      path: '/api/settings/multi_counter_enabled',
+      method: 'PUT',
+      headers: owner.authHeader,
+      body: { value: 'false' },
+    });
+    assertEqualOrThrow(disabledSetting.status, 200, 'multi-counter disabled for creation check');
+    const beforeDisabled = {
+      orders: (db.prepare('SELECT COUNT(*) AS count FROM orders').get() as any).count,
+      bills: (db.prepare('SELECT COUNT(*) AS count FROM bills').get() as any).count,
+      attempts: (db.prepare('SELECT COUNT(*) AS count FROM order_idempotency').get() as any).count,
+      stock: productStock(db, 'prod-burger'),
+      sequences: JSON.stringify(db.prepare('SELECT * FROM sequences ORDER BY name, date').all()),
+    };
+    const disabledCreation = await req({
+      path: '/api/orders',
+      method: 'POST',
+      headers: { ...serverUser.authHeader, 'Idempotency-Key': 'disabled-create-test' },
+      body: {
+        type: 'takeaway',
+        dispatch_policy: 'on_payment',
+        items: [{ product_id: 'prod-burger', quantity: 1 }],
+      },
+    });
+    assertEqualOrThrow(
+      disabledCreation.status,
+      409,
+      'disabled multi-counter rejects new deferred ticket',
+    );
+    assertEqualOrThrow(
+      disabledCreation.body.code,
+      'MULTI_COUNTER_DISABLED',
+      'disabled error has stable code',
+    );
+    assertEqualOrThrow(
+      disabledCreation.body.outcome,
+      'not_applied',
+      'disabled error reports no mutation',
+    );
+    assertEqualOrThrow(
+      (db.prepare('SELECT COUNT(*) AS count FROM orders').get() as any).count,
+      beforeDisabled.orders,
+      'disabled creation leaves no order',
+    );
+    assertEqualOrThrow(
+      (db.prepare('SELECT COUNT(*) AS count FROM bills').get() as any).count,
+      beforeDisabled.bills,
+      'disabled creation leaves no bill',
+    );
+    assertEqualOrThrow(
+      (db.prepare('SELECT COUNT(*) AS count FROM order_idempotency').get() as any).count,
+      beforeDisabled.attempts,
+      'disabled creation leaves no idempotency record',
+    );
+    assertEqualOrThrow(
+      productStock(db, 'prod-burger'),
+      beforeDisabled.stock,
+      'disabled creation leaves stock unchanged',
+    );
+    assertEqualOrThrow(
+      JSON.stringify(db.prepare('SELECT * FROM sequences ORDER BY name, date').all()),
+      beforeDisabled.sequences,
+      'disabled creation does not allocate an order number',
+    );
+    const ordinaryDisabled = await req({
+      path: '/api/orders',
+      method: 'POST',
+      headers: serverUser.authHeader,
+      body: { type: 'takeaway', items: [{ product_id: 'prod-burger', quantity: 1 }] },
+    });
+    assertEqualOrThrow(
+      ordinaryDisabled.status,
+      201,
+      'ordinary order remains available when multi-counter is disabled',
+    );
+    const cancelOrdinary = await req({
+      path: `/api/orders/${ordinaryDisabled.body.order.id}/status`,
+      method: 'PATCH',
+      headers: owner.authHeader,
+      body: { status: 'cancelled' },
+    });
+    assertEqualOrThrow(cancelOrdinary.status, 200, 'ordinary test order cancels normally');
 
     // Non-owner cannot toggle multi_counter_enabled
     const cashierToggle = await req({
@@ -481,6 +606,68 @@ async function main() {
     assertOrThrow(!!idemOrder1.body?.qr_payload, 'initial response includes qr_payload');
     assertOrThrow(!!idemOrder1.body?.qr_data_url, 'initial response includes qr_data_url');
 
+    const payableAfterDisable = await req({
+      path: '/api/orders',
+      method: 'POST',
+      headers: serverUser.authHeader,
+      body: {
+        type: 'takeaway',
+        dispatch_policy: 'on_payment',
+        scheduled_for: futureWallClockInZone('America/New_York', 45),
+        items: [{ product_id: 'prod-burger', quantity: 1 }],
+      },
+    });
+    assertEqualOrThrow(payableAfterDisable.status, 201, 'deferred ticket created before disabling');
+    const payableBill = db
+      .prepare('SELECT * FROM bills WHERE order_id = ?')
+      .get(payableAfterDisable.body.order.id) as any;
+    const disabledAfterCommit = await req({
+      path: '/api/settings/multi_counter_enabled',
+      method: 'PUT',
+      headers: owner.authHeader,
+      body: { value: 'false' },
+    });
+    assertEqualOrThrow(disabledAfterCommit.status, 200, 'feature disabled after committed ticket');
+    const paidAfterDisable = await req({
+      path: `/api/bills/${payableBill.id}/payment`,
+      method: 'POST',
+      headers: cashier.authHeader,
+      body: { method: 'cash', amount: Number(payableBill.total) },
+    });
+    assertEqualOrThrow(
+      paidAfterDisable.status,
+      200,
+      'existing deferred ticket remains payable after disabling',
+    );
+    const refundedAfterDisable = await req({
+      path: '/api/refunds',
+      method: 'POST',
+      headers: owner.authHeader,
+      body: {
+        bill_id: payableBill.id,
+        amount: Number(payableBill.total),
+        method: 'cash',
+        reason: 'Fixture cleanup',
+        approver_id: owner.userId,
+        override_pin: '9999',
+      },
+    });
+    assertEqualOrThrow(
+      refundedAfterDisable.status,
+      201,
+      'existing deferred ticket remains refundable after disabling',
+    );
+    const cancelledAfterDisable = await req({
+      path: `/api/orders/${payableAfterDisable.body.order.id}/status`,
+      method: 'PATCH',
+      headers: owner.authHeader,
+      body: { status: 'cancelled', reason: 'Fixture cleanup' },
+    });
+    assertEqualOrThrow(
+      cancelledAfterDisable.status,
+      200,
+      'existing deferred ticket remains cancellable after disabling',
+    );
     const idemReplay = await req({
       path: '/api/orders',
       method: 'POST',
@@ -507,6 +694,33 @@ async function main() {
         idemReplay.body.qr_data_url.startsWith('data:image/png;base64,'),
       'replayed qr_data_url is present',
     );
+    const idemConflictAfterDisable = await req({
+      path: '/api/orders',
+      method: 'POST',
+      headers: { ...serverUser.authHeader, 'Idempotency-Key': idemKeyOrder },
+      body: {
+        type: 'takeaway',
+        dispatch_policy: 'on_payment',
+        items: [{ product_id: 'prod-burger', quantity: 2 }],
+      },
+    });
+    assertEqualOrThrow(
+      idemConflictAfterDisable.status,
+      409,
+      'changed replay remains a conflict after disabling',
+    );
+    assertIncludesOrThrow(
+      idemConflictAfterDisable.body.error,
+      'Idempotency-Key',
+      'changed replay reports the existing request-hash conflict',
+    );
+    const reenabledSetting = await req({
+      path: '/api/settings/multi_counter_enabled',
+      method: 'PUT',
+      headers: owner.authHeader,
+      body: { value: 'true' },
+    });
+    assertEqualOrThrow(reenabledSetting.status, 200, 'feature re-enabled for remaining scenarios');
     db.prepare("UPDATE orders SET status = 'cancelled' WHERE id = ?").run(idemOrder1.body.order.id);
 
     // Create valid takeaway order with dispatch_policy: 'on_payment'
@@ -548,6 +762,39 @@ async function main() {
       orderRes.body.qr_data_url.startsWith('data:image/png;base64,'),
       'qr_data_url is PNG data url',
     );
+
+    const scheduledOnly = await req({
+      path: '/api/orders/scheduled',
+      method: 'GET',
+      headers: cashier.authHeader,
+    });
+    assertEqualOrThrow(scheduledOnly.status, 200, 'scheduled queue loads');
+    assertOrThrow(
+      !scheduledOnly.body.orders.some((order: any) => order.id === order1.id),
+      'unscheduled deferred order is excluded from scheduled queue',
+    );
+    assertEqualOrThrow(
+      scheduledOnly.body.scheduled_count,
+      0,
+      'unscheduled deferred order is excluded from scheduled count',
+    );
+    db.prepare("UPDATE orders SET release_status = 'blocked' WHERE id = ?").run(order1.id);
+    const blockedScheduledOnly = await req({
+      path: '/api/orders/scheduled?limit=1',
+      method: 'GET',
+      headers: cashier.authHeader,
+    });
+    assertEqualOrThrow(
+      blockedScheduledOnly.body.blocked_count,
+      0,
+      'unscheduled blocked order is excluded from blocked count',
+    );
+    assertEqualOrThrow(
+      blockedScheduledOnly.body.orders.length,
+      0,
+      'unscheduled blocked order is excluded from scheduled pages',
+    );
+    db.prepare("UPDATE orders SET release_status = 'scheduled' WHERE id = ?").run(order1.id);
 
     // Verify stock was NOT deducted
     assertEqualOrThrow(
@@ -709,6 +956,64 @@ async function main() {
       foundNonMcInQueue,
       undefined,
       'non-MC blocked order NOT in awaiting-payment queue',
+    );
+    const scheduledPageControl = await req({
+      path: '/api/orders',
+      method: 'POST',
+      headers: serverUser.authHeader,
+      body: {
+        type: 'takeaway',
+        scheduled_for: futureWallClockInZone('America/New_York', 30),
+        items: [{ product_id: 'prod-fries', quantity: 1 }],
+      },
+    });
+    assertEqualOrThrow(scheduledPageControl.status, 201, 'scheduled pagination control created');
+    db.prepare("UPDATE orders SET release_status = 'blocked' WHERE id = ?").run(order1.id);
+    const scheduledFirst = await req({
+      path: '/api/orders/scheduled?limit=1',
+      method: 'GET',
+      headers: cashier.authHeader,
+    });
+    assertEqualOrThrow(
+      scheduledFirst.status,
+      200,
+      'scheduled first page loads with unscheduled blocked ticket',
+    );
+    assertEqualOrThrow(
+      scheduledFirst.body.scheduled_count,
+      1,
+      'scheduled count excludes undated tickets',
+    );
+    assertEqualOrThrow(
+      scheduledFirst.body.blocked_count,
+      1,
+      'blocked count excludes undated tickets',
+    );
+    assertEqualOrThrow(
+      scheduledFirst.body.orders[0].id,
+      nonMcBlockedOrder.body.order.id,
+      'dated blocked order appears first',
+    );
+    assertOrThrow(!!scheduledFirst.body.next_cursor, 'scheduled first page supplies a cursor');
+    const scheduledSecond = await req({
+      path: `/api/orders/scheduled?limit=1&cursor=${encodeURIComponent(scheduledFirst.body.next_cursor)}`,
+      method: 'GET',
+      headers: cashier.authHeader,
+    });
+    assertEqualOrThrow(scheduledSecond.status, 200, 'scheduled second page loads');
+    assertEqualOrThrow(
+      scheduledSecond.body.orders[0].id,
+      scheduledPageControl.body.order.id,
+      'dated scheduled order appears on second page',
+    );
+    assertEqualOrThrow(
+      scheduledSecond.body.next_cursor,
+      null,
+      'undated tickets do not create extra scheduled pages',
+    );
+    db.prepare("UPDATE orders SET release_status = 'scheduled' WHERE id = ?").run(order1.id);
+    db.prepare("UPDATE orders SET status = 'cancelled' WHERE id = ?").run(
+      scheduledPageControl.body.order.id,
     );
     db.prepare("UPDATE orders SET status = 'cancelled' WHERE id = ?").run(
       nonMcBlockedOrder.body.order.id,
@@ -942,6 +1247,47 @@ async function main() {
     );
     assertEqualOrThrow(orderDineInAfterPay.status, 'pending', 'dine in status remains pending');
 
+    const dineInItem = orderDineIn.items[0];
+    const dineInServedRes = await req({
+      path: `/api/order-items/${dineInItem.id}/status`,
+      method: 'PATCH',
+      headers: owner.authHeader,
+      body: { status: 'served' },
+    });
+    assertEqualOrThrow(dineInServedRes.status, 200, 'served dine-in item after payment');
+    const orderDineInAfterServed = db
+      .prepare('SELECT status FROM orders WHERE id = ?')
+      .get(orderDineIn.id) as any;
+    assertEqualOrThrow(
+      orderDineInAfterServed.status,
+      'served',
+      'dine-in order remains served instead of auto-completing',
+    );
+    const tblRowAfterServed = db
+      .prepare('SELECT status FROM tables WHERE id = ?')
+      .get('tbl-mc-1') as any;
+    assertEqualOrThrow(
+      tblRowAfterServed.status,
+      'occupied',
+      'dine-in table remains occupied after the last item is served',
+    );
+
+    const completeDineInRes = await req({
+      path: `/api/orders/${orderDineIn.id}/status`,
+      method: 'PATCH',
+      headers: owner.authHeader,
+      body: { status: 'completed' },
+    });
+    assertEqualOrThrow(completeDineInRes.status, 200, 'complete settled dine-in order');
+    const tblRowAfterComplete = db
+      .prepare('SELECT status FROM tables WHERE id = ?')
+      .get('tbl-mc-1') as any;
+    assertEqualOrThrow(
+      tblRowAfterComplete.status,
+      'available',
+      'explicit completion releases the dine-in table',
+    );
+
     const splitDineInRes = await req({
       path: '/api/orders',
       method: 'POST',
@@ -1009,6 +1355,16 @@ async function main() {
       Number(splitQueueRow.balance),
       Number(splitBill2.balance),
       'queue row shows splitBill2 balance',
+    );
+    assertEqualOrThrow(
+      Number(splitQueueRow.ticket_balance),
+      Number(splitBill2.balance),
+      'queue ticket balance covers all split bills',
+    );
+    assertEqualOrThrow(
+      Number(splitQueueRow.ticket_paid_amount),
+      Number(splitBill1.total),
+      'queue ticket paid amount includes settled split bills',
     );
 
     const lookupSplitTicket = await req({
@@ -1194,19 +1550,21 @@ async function main() {
       headers: cashier.authHeader,
       body: { method: 'cash', amount: Number(rsBill1.total) },
     });
-    await req({
+    const siblingRefund = await req({
       path: '/api/refunds',
       method: 'POST',
       headers: owner.authHeader,
       body: {
         bill_id: rsBill1.id,
-        amount: Number(rsBill1.total) / 100,
+        amount: Number(rsBill1.total),
         method: 'cash',
         reason: 'Guest A left',
         approver_id: owner.userId,
         override_pin: '9999',
       },
     });
+
+    assertEqualOrThrow(siblingRefund.status, 201, 'split sibling fully refunded');
 
     await req({
       path: `/api/bills/${rsBill2.id}/payment`,
@@ -1227,6 +1585,28 @@ async function main() {
       refundSiblingOrderRow.release_status,
       'scheduled',
       'order remains unreleased',
+    );
+    const siblingStatuses = db
+      .prepare('SELECT payment_status FROM bills WHERE id IN (?, ?) ORDER BY id')
+      .all(rsBill1.id, rsBill2.id) as Array<{ payment_status: string }>;
+    assertOrThrow(
+      siblingStatuses.some((bill) => bill.payment_status === 'refunded'),
+      'one split bill is fully refunded',
+    );
+    assertOrThrow(
+      siblingStatuses.some((bill) => bill.payment_status === 'paid'),
+      'the other split bill remains paid',
+    );
+    const mixedRelease = await req({
+      path: `/api/orders/${refundSiblingOrder.id}/release`,
+      method: 'POST',
+      headers: cashier.authHeader,
+    });
+    assertEqualOrThrow(mixedRelease.status, 409, 'mixed split bills cannot bypass payment gate');
+    assertEqualOrThrow(
+      mixedRelease.body.code,
+      'ORDER_NOT_PAID',
+      'mixed split bills do not trigger full-refund hold',
     );
     db.prepare("UPDATE orders SET status = 'cancelled' WHERE id = ?").run(refundSiblingOrder.id);
 
@@ -1249,6 +1629,21 @@ async function main() {
     });
     assertEqualOrThrow(schedOrderRes.status, 201, 'scheduled on_payment takeaway created 201');
     const schedOrder = schedOrderRes.body.order;
+
+    const scheduledPage = await req({
+      path: '/api/orders/scheduled?limit=1',
+      method: 'GET',
+      headers: cashier.authHeader,
+    });
+    assertEqualOrThrow(scheduledPage.status, 200, 'scheduled queue with deferred tickets loads');
+    assertOrThrow(
+      scheduledPage.body.orders.every((order: any) => order.scheduled_for),
+      'scheduled page contains only dated orders',
+    );
+    assertOrThrow(
+      scheduledPage.body.orders.some((order: any) => order.id === schedOrder.id),
+      'scheduled deferred ticket appears in scheduled queue',
+    );
 
     const schedBill = db
       .prepare('SELECT * FROM bills WHERE order_id = ?')
@@ -1288,6 +1683,130 @@ async function main() {
       manualReleaseRes.body?.order?.release_status,
       'released',
       'order is released',
+    );
+
+    const refundScheduledRes = await req({
+      path: '/api/orders',
+      method: 'POST',
+      headers: serverUser.authHeader,
+      body: {
+        type: 'takeaway',
+        dispatch_policy: 'on_payment',
+        scheduled_for: futureTime,
+        items: [{ product_id: 'prod-fries', quantity: 1 }],
+      },
+    });
+    assertEqualOrThrow(refundScheduledRes.status, 201, 'scheduled deferred refund order created');
+    const refundScheduledId = refundScheduledRes.body.order.id;
+    const refundScheduledBill = db
+      .prepare('SELECT * FROM bills WHERE order_id = ?')
+      .get(refundScheduledId) as any;
+    const refundScheduledPay = await req({
+      path: `/api/bills/${refundScheduledBill.id}/payment`,
+      method: 'POST',
+      headers: cashier.authHeader,
+      body: { method: 'cash', amount: Number(refundScheduledBill.total) },
+    });
+    assertEqualOrThrow(refundScheduledPay.status, 200, 'scheduled deferred order paid');
+    const refundScheduled = await req({
+      path: '/api/refunds',
+      method: 'POST',
+      headers: owner.authHeader,
+      body: {
+        bill_id: refundScheduledBill.id,
+        amount: Number(refundScheduledBill.total),
+        method: 'cash',
+        reason: 'Customer cancelled',
+        approver_id: owner.userId,
+        override_pin: '9999',
+      },
+    });
+    assertEqualOrThrow(refundScheduled.status, 201, 'scheduled deferred order fully refunded');
+    const refundScheduledStock = productStock(db, 'prod-fries');
+    const refundScheduledPrints = kotPrintCalls.length;
+    db.prepare("UPDATE orders SET scheduled_for = '2000-01-01T00:00:00.000Z' WHERE id = ?").run(
+      refundScheduledId,
+    );
+    const refundScheduledSweep = await sweepDueScheduledOrders(db, { trigger: 'sweep' });
+    assertOrThrow(
+      refundScheduledSweep.blockedIds.includes(refundScheduledId),
+      'sweep blocks refunded deferred order',
+    );
+    const refundScheduledRelease = await req({
+      path: `/api/orders/${refundScheduledId}/release`,
+      method: 'POST',
+      headers: cashier.authHeader,
+    });
+    assertEqualOrThrow(
+      refundScheduledRelease.status,
+      409,
+      'refunded scheduled deferred release rejected',
+    );
+    assertEqualOrThrow(
+      refundScheduledRelease.body.code,
+      'RELEASE_BLOCKED',
+      'refunded deferred order reports release hold',
+    );
+    assertEqualOrThrow(
+      refundScheduledRelease.body.order.release_blocked_reason,
+      'refunded',
+      'refunded deferred order carries hold reason',
+    );
+    const repeatedRefundSweep = await sweepDueScheduledOrders(db, { trigger: 'sweep' });
+    assertOrThrow(
+      !repeatedRefundSweep.releasedIds.includes(refundScheduledId),
+      'repeated sweep does not release refunded deferred order',
+    );
+    const repeatedRefundRelease = await req({
+      path: `/api/orders/${refundScheduledId}/release`,
+      method: 'POST',
+      headers: cashier.authHeader,
+    });
+    assertEqualOrThrow(
+      repeatedRefundRelease.status,
+      409,
+      'repeated manual release keeps refund hold',
+    );
+    assertEqualOrThrow(
+      productStock(db, 'prod-fries'),
+      refundScheduledStock,
+      'refund hold leaves deferred product stock unchanged',
+    );
+    assertEqualOrThrow(
+      kotPrintCalls.length,
+      refundScheduledPrints,
+      'refund hold does not print a deferred KOT',
+    );
+    const refundHoldAudit = db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM order_audit_log WHERE order_id = ? AND action = 'release_blocked'",
+      )
+      .get(String(refundScheduledId)) as { count: number };
+    assertEqualOrThrow(
+      refundHoldAudit.count,
+      1,
+      'repeated deferred refund holds record one audit entry',
+    );
+    const refundKds = await req({
+      path: '/api/kds/orders',
+      method: 'GET',
+      headers: owner.authHeader,
+    });
+    assertEqualOrThrow(refundKds.status, 200, 'KDS orders load after refund hold');
+    assertOrThrow(
+      !refundKds.body.orders.some((order: any) => order.id === refundScheduledId),
+      'refunded deferred order is absent from KDS',
+    );
+    const cancelRefundScheduled = await req({
+      path: `/api/orders/${refundScheduledId}/status`,
+      method: 'PATCH',
+      headers: owner.authHeader,
+      body: { status: 'cancelled', reason: 'Customer cancelled' },
+    });
+    assertEqualOrThrow(
+      cancelRefundScheduled.status,
+      200,
+      'refunded deferred order can be cancelled',
     );
 
     // Item 15: Takeaway order completion when kds_enabled is false
@@ -1585,6 +2104,7 @@ async function main() {
     });
     assertEqualOrThrow(splitBalanceSplitRes.status, 201, 'split into 2 checks for balance test');
     const [sbCheck1] = splitBalanceSplitRes.body.bills;
+    const [, sbCheck2] = splitBalanceSplitRes.body.bills;
 
     // Pay Check 1 in full
     await req({
@@ -1609,7 +2129,226 @@ async function main() {
     const previewText = previewBytes.toString('utf8');
     assertOrThrow(previewText.includes('Balance Due:'), 'print ticket includes Balance Due');
     assertOrThrow(previewText.includes('Date:'), 'print ticket includes localized Date');
+
+    const longTicketName =
+      'Extraordinarily long product name with several words reserved amount column';
+    db.prepare('UPDATE order_items SET product_name = ? WHERE order_id = ? AND id = ?').run(
+      longTicketName,
+      splitBalanceOrder.id,
+      sbItems[0].id,
+    );
+    const longBusinessName = 'Cafe Ticket House MerchantName HarborSide NorthShore CoffeeRoasters';
+    setStoreSetting(db, 'business_name', longBusinessName);
+    const paymentTicketPrinters = [
+      { id: 'prn-mc-payment-58', width: '58mm', columns: 32 },
+      { id: 'prn-mc-payment-80', width: '80mm-42', columns: 42 },
+    ];
+    for (const target of paymentTicketPrinters) {
+      db.prepare(
+        'INSERT OR REPLACE INTO printers (id, name, connection_type, paper_width, is_default) VALUES (?, ?, ?, ?, 0)',
+      ).run(target.id, `Payment ${target.width}`, 'network', target.width);
+      const response = await req({
+        path: '/api/printers/print-payment-ticket',
+        method: 'POST',
+        headers: serverUser.authHeader,
+        body: { orderId: splitBalanceOrder.id, printerId: target.id, preview: true },
+      });
+      assertEqualOrThrow(response.status, 200, `${target.width} payment ticket preview succeeds`);
+      const text = escPosToText(Buffer.from(response.body.bytes));
+      assertOrThrow(
+        longBusinessName.split(' ').every((word: string) => text.includes(word)),
+        `${target.width} wraps the complete business_name`,
+      );
+      assertOrThrow(
+        text.includes('PAYMENT TICKET'),
+        `${target.width} has a centered ticket heading`,
+      );
+      assertOrThrow(text.includes('Balance Due:'), `${target.width} prints balance due`);
+      assertOrThrow(
+        longTicketName.split(' ').every((word: string) => text.includes(word)),
+        `${target.width} wraps the complete long product name`,
+      );
+      assertOrThrow(
+        !/[{](?:CENTER|BOLD|\/(?:CENTER|BOLD))[}]/.test(text),
+        `${target.width} does not emit unsupported formatting tokens`,
+      );
+      const printableLines = text
+        .split('\n')
+        .filter((line: string) => !/[\x00-\x1f\x7f]/.test(line));
+      const overflowLines = printableLines.filter((line: string) => line.length > target.columns);
+      assertOrThrow(
+        overflowLines.length === 0,
+        `${target.width} emitted text fits its configured display columns (${overflowLines.join(' | ')})`,
+      );
+    }
+
+    const largeTicketAmount = 1_000_000_000_000_000_000;
+    db.prepare('UPDATE orders SET total = ? WHERE id = ?').run(
+      largeTicketAmount,
+      splitBalanceOrder.id,
+    );
+    db.prepare('UPDATE bills SET balance = ? WHERE id = ?').run(largeTicketAmount, sbCheck2.id);
+    const longTicketAmount = '$1,000,000,000,000,000,000.00';
+    for (const target of paymentTicketPrinters) {
+      const response = await req({
+        path: '/api/printers/print-payment-ticket',
+        method: 'POST',
+        headers: serverUser.authHeader,
+        body: { orderId: splitBalanceOrder.id, printerId: target.id, preview: true },
+      });
+      assertEqualOrThrow(
+        response.status,
+        200,
+        `${target.width} large-amount ticket preview succeeds`,
+      );
+      const text = escPosToText(Buffer.from(response.body.bytes));
+      const lines = text.split('\n');
+      for (const label of ['Total:', 'Balance Due:']) {
+        const labelIndex = lines.findIndex((line: string) => line.includes(label));
+        assertOrThrow(labelIndex >= 0, `${target.width} prints ${label}`);
+        if (target.columns === 32) {
+          assertOrThrow(
+            lines[labelIndex + 1]?.includes(longTicketAmount),
+            `${target.width} prints the complete ${label} on a following line`,
+          );
+        } else {
+          assertOrThrow(
+            lines
+              .slice(labelIndex, labelIndex + 2)
+              .some((line: string) => line.includes(longTicketAmount)),
+            `${target.width} keeps the complete amount beside ${label}`,
+          );
+        }
+      }
+      const printableLines = lines.filter((line: string) => !/[\x00-\x1f\x7f]/.test(line));
+      const overflowLines = printableLines.filter((line: string) => line.length > target.columns);
+      assertOrThrow(
+        overflowLines.length === 0,
+        `${target.width} large-amount lines fit the configured columns (${overflowLines.join(' | ')})`,
+      );
+    }
+
+    const unprintableAmount = 1e30;
+    db.prepare('UPDATE orders SET total = ? WHERE id = ?').run(
+      unprintableAmount,
+      splitBalanceOrder.id,
+    );
+    db.prepare('UPDATE bills SET balance = ? WHERE id = ?').run(unprintableAmount, sbCheck2.id);
+    const unprintableTicket = await req({
+      path: '/api/printers/print-payment-ticket',
+      method: 'POST',
+      headers: serverUser.authHeader,
+      body: {
+        orderId: splitBalanceOrder.id,
+        printerId: paymentTicketPrinters[0].id,
+        preview: true,
+      },
+    });
+    assertEqualOrThrow(unprintableTicket.status, 502, 'amount wider than paper is rejected');
+    assertOrThrow(
+      String(unprintableTicket.body?.error).includes('overflows available line width'),
+      'rejected amount reports its width constraint',
+    );
+    db.prepare('UPDATE orders SET total = ? WHERE id = ?').run(
+      largeTicketAmount,
+      splitBalanceOrder.id,
+    );
+    db.prepare('UPDATE bills SET balance = ? WHERE id = ?').run(largeTicketAmount, sbCheck2.id);
+
+    const controlTokenName = `${'X'.repeat(14)} {CUT} ${'Y'.repeat(23)}`;
+    db.prepare('UPDATE order_items SET product_name = ? WHERE order_id = ? AND id = ?').run(
+      controlTokenName,
+      splitBalanceOrder.id,
+      sbItems[0].id,
+    );
+    const controlTokenPreview = await req({
+      path: '/api/printers/print-payment-ticket',
+      method: 'POST',
+      headers: serverUser.authHeader,
+      body: {
+        orderId: splitBalanceOrder.id,
+        printerId: paymentTicketPrinters[0].id,
+        preview: true,
+      },
+    });
+    assertEqualOrThrow(controlTokenPreview.status, 200, 'hostile catalog name preview succeeds');
+    const controlTokenBytes = Buffer.from(controlTokenPreview.body.bytes);
+    const controlTokenCutCount = controlTokenBytes.reduce(
+      (count: number, byte: number, index: number, bytes: Buffer) =>
+        count + (byte === 0x1d && bytes[index + 1] === 0x56 ? 1 : 0),
+      0,
+    );
+    const controlTokenText = escPosToText(controlTokenBytes);
+    assertEqualOrThrow(controlTokenCutCount, 1, 'catalog text cannot inject a printer cut command');
+    assertOrThrow(controlTokenText.includes('Balance Due:'), 'ticket continues through balance');
+    assertOrThrow(controlTokenText.includes('FLOCAFE-TICKET:'), 'ticket continues through QR text');
+
     db.prepare("UPDATE orders SET status = 'cancelled' WHERE id = ?").run(splitBalanceOrder.id);
+
+    // Queue amounts retain bill selection while aggregating all bills and refunds in tenant minor units.
+    setStoreSetting(db, 'country', 'BH');
+    setStoreSetting(db, 'timezone', 'Asia/Bahrain');
+    db.prepare("DELETE FROM settings WHERE key = 'currency'").run();
+    seedProduct(db, 'prod-mc-bhd-queue', 'cat-mc', 'Bahraini Queue Item', 1, {
+      track_inventory: false,
+      stock_quantity: 0,
+    });
+    const bhdQueueOrderRes = await req({
+      path: '/api/orders',
+      method: 'POST',
+      headers: serverUser.authHeader,
+      body: {
+        type: 'takeaway',
+        dispatch_policy: 'on_payment',
+        items: [{ product_id: 'prod-mc-bhd-queue', quantity: 1 }],
+      },
+    });
+    assertEqualOrThrow(bhdQueueOrderRes.status, 201, 'create BHD payment queue order');
+    const bhdQueueOrder = bhdQueueOrderRes.body.order;
+    const bhdQueueBill = db
+      .prepare('SELECT * FROM bills WHERE order_id = ?')
+      .get(bhdQueueOrder.id) as any;
+    db.prepare(
+      "UPDATE bills SET paid_amount = 0.996, balance = 0.004, payment_status = 'partial', payment_details = ? WHERE id = ?",
+    ).run(JSON.stringify([{ method: 'card', amount: 0.996 }]), bhdQueueBill.id);
+    db.prepare(
+      `INSERT INTO refunds (bill_id, amount_cents, method, approved_by, created_by, created_at)
+       VALUES (?, ?, 'cash', ?, ?, ?)`,
+    ).run(bhdQueueBill.id, 100, owner.userId, owner.userId, now());
+    const bhdQueueRes = await req({
+      path: '/api/orders/awaiting-payment',
+      method: 'GET',
+      headers: cashier.authHeader,
+    });
+    assertEqualOrThrow(bhdQueueRes.status, 200, 'fetch BHD queue ticket aggregate');
+    const bhdQueueTicket = bhdQueueRes.body.orders.find(
+      (order: any) => order.id === bhdQueueOrder.id,
+    );
+    assertOrThrow(!!bhdQueueTicket, 'BHD order appears in payment queue');
+    assertEqualOrThrow(bhdQueueTicket.bill_id, bhdQueueBill.id, 'BHD ticket retains selected bill');
+    assertEqualOrThrow(
+      Number(bhdQueueTicket.balance).toFixed(3),
+      '0.004',
+      'selected bill balance stays precise',
+    );
+    assertEqualOrThrow(
+      Number(bhdQueueTicket.paid_amount).toFixed(3),
+      '0.996',
+      'selected bill paid amount stays precise',
+    );
+    assertEqualOrThrow(
+      Number(bhdQueueTicket.ticket_balance).toFixed(3),
+      '0.004',
+      'aggregate balance stays precise',
+    );
+    assertEqualOrThrow(
+      Number(bhdQueueTicket.ticket_paid_amount).toFixed(3),
+      '0.896',
+      'aggregate paid amount accounts for refund',
+    );
+    setStoreSetting(db, 'country', 'US');
+    setStoreSetting(db, 'currency', 'USD');
+    setStoreSetting(db, 'timezone', 'America/New_York');
 
     // -------------------------------------------------------------------------
     // Summary

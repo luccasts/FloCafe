@@ -104,6 +104,7 @@ import {
   completeExactBalanceSettlement,
   createOrSyncBillForOrder,
   getTenantCurrency,
+  paymentMethodCorrectionEligibility,
   preVerifyKitchenDeliveryPin,
   syncUnpaidBillsForOrder,
 } from './bills';
@@ -1321,6 +1322,7 @@ function batchHydrateOrders(db: ReturnType<typeof getDatabase>, orders: any[]) {
     .all(...ids) as any[];
   for (const b of billRows) {
     const parsed = parseRowJson(b);
+    parsed.payment_method_correction = paymentMethodCorrectionEligibility(db, parsed);
     const siblings = billsByOrderId.get(parsed.order_id) || [];
     siblings.push(parsed);
     billsByOrderId.set(parsed.order_id, siblings);
@@ -1474,6 +1476,7 @@ router.get(
              COUNT(CASE WHEN release_status = 'blocked' THEN 1 END) AS blocked_count
            FROM orders
            WHERE release_status IN ('scheduled', 'blocked')
+             AND scheduled_for IS NOT NULL
              AND status NOT IN ('cancelled', 'completed')`,
         )
         .get() as { scheduled_count: number; blocked_count: number } | undefined;
@@ -1483,6 +1486,7 @@ router.get(
 
       let sql = `SELECT * FROM orders
                  WHERE release_status IN ('scheduled', 'blocked')
+                   AND scheduled_for IS NOT NULL
                    AND status NOT IN ('cancelled', 'completed')`;
       const params: unknown[] = [];
 
@@ -1603,6 +1607,7 @@ router.get(
           o.scheduled_for,
           o.total,
           o.total AS total_amount,
+          o.round_off,
           o.checkout_stage,
           o.dispatch_policy,
           o.release_status,
@@ -1666,10 +1671,23 @@ router.get(
               'utf8',
             ).toString('base64')
           : null;
+      const tickets = pageRows.map((order) => {
+        const paymentTotals = evaluateOrderStatusPaymentBlock(
+          db,
+          order.id,
+          order.total,
+          order.round_off,
+        );
+        return {
+          ...order,
+          ticket_balance: paymentTotals.totalOutstandingMinor / paymentTotals.minorFactor,
+          ticket_paid_amount: paymentTotals.totalCollectedMinor / paymentTotals.minorFactor,
+        };
+      });
 
       res.json({
-        orders: pageRows,
-        tickets: pageRows,
+        orders: tickets,
+        tickets,
         next_cursor,
         has_more: hasMore,
         awaiting_count,
@@ -2208,6 +2226,17 @@ router.post(
             }
           }
         }
+        if (isOnPayment) {
+          const setting = db
+            .prepare("SELECT value FROM settings WHERE key = 'multi_counter_enabled'")
+            .get() as { value: string } | undefined;
+          if (setting?.value !== 'true') {
+            throw Object.assign(new Error('Multi-counter ordering is disabled.'), {
+              statusCode: 409,
+              code: 'MULTI_COUNTER_DISABLED',
+            });
+          }
+        }
         // Generate order number inside transaction to prevent race conditions
         const orderNumber = generateOrderNumber();
 
@@ -2721,16 +2750,15 @@ router.post(
             : statusCode >= 500
               ? 'fc.backend.order.create.persistence'
               : 'fc.backend.order.create.other_validation';
-      return res
-        .status(statusCode)
-        .json(
-          structuredOperationFailure(
-            req,
-            point,
-            operationCommitted ? 'applied' : 'not_applied',
-            error.statusCode ? error.message : 'Internal server error',
-          ),
-        );
+      return res.status(statusCode).json({
+        ...structuredOperationFailure(
+          req,
+          point,
+          operationCommitted ? 'applied' : 'not_applied',
+          error.statusCode ? error.message : 'Internal server error',
+        ),
+        ...(error.code === 'MULTI_COUNTER_DISABLED' ? { code: error.code } : {}),
+      });
     }
   }),
 );

@@ -839,7 +839,25 @@ export default function CartPanel({
               </span>
             </Button>
           )}
-          {multiCounterEnabled && counterRole === 'payment' ? (
+          {existingOrder ? (
+            <Button
+              onClick={onPlaceOrder}
+              disabled={submitting || cart.items.length === 0 || Boolean(scheduleErrorMessage)}
+              className="flex-1"
+              size="lg"
+              data-testid="pos-append-existing-order-btn"
+            >
+              {submitting ? t('placing') : t('placeOrderButton')}
+              {!submitting && (
+                <span
+                  aria-hidden="true"
+                  className="hidden sm:inline-flex ms-1.5 px-1.5 py-0.5 rounded bg-white/20 text-[10px] font-mono font-medium"
+                >
+                  Space
+                </span>
+              )}
+            </Button>
+          ) : multiCounterEnabled && counterRole === 'payment' ? (
             cart.items.length === 0 ? (
               <Button
                 type="button"
@@ -884,19 +902,16 @@ export default function CartPanel({
                 </Button>
               </>
             )
-          ) : multiCounterEnabled && onSendToPayment && counterRole === 'ordering' ? (
+          ) : multiCounterEnabled &&
+            onSendToPayment &&
+            counterRole === 'ordering' &&
+            (cart.orderType === 'takeaway' || cart.orderType === 'dine_in') ? (
             <Button
               onClick={onSendToPayment}
-              disabled={
-                submitting ||
-                cart.items.length === 0 ||
-                cart.orderType === 'delivery' ||
-                Boolean(scheduleErrorMessage)
-              }
+              disabled={submitting || cart.items.length === 0 || Boolean(scheduleErrorMessage)}
               className="flex-1"
               size="lg"
               data-testid="pos-send-to-payment-btn"
-              title={cart.orderType === 'delivery' ? t('sendToPaymentDeliveryError') : undefined}
             >
               {submitting ? t('placing') : t('sendToPayment')}
               {!submitting && (
@@ -908,21 +923,18 @@ export default function CartPanel({
                 </span>
               )}
             </Button>
-          ) : multiCounterEnabled && onSendToPayment && counterRole === 'combined' ? (
+          ) : multiCounterEnabled &&
+            onSendToPayment &&
+            counterRole === 'combined' &&
+            (cart.orderType === 'takeaway' || cart.orderType === 'dine_in') ? (
             <>
               <Button
                 variant="outline"
                 onClick={onSendToPayment}
-                disabled={
-                  submitting ||
-                  cart.items.length === 0 ||
-                  cart.orderType === 'delivery' ||
-                  Boolean(scheduleErrorMessage)
-                }
+                disabled={submitting || cart.items.length === 0 || Boolean(scheduleErrorMessage)}
                 className="flex-1"
                 size="lg"
                 data-testid="pos-send-to-payment-btn"
-                title={cart.orderType === 'delivery' ? t('sendToPaymentDeliveryError') : undefined}
               >
                 {t('sendToPayment')}
               </Button>
