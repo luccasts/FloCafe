@@ -3609,6 +3609,24 @@
       "connection": "Connexion",
       "inbox": "Boîte de réception",
       "sent": "Envoyés"
+    },
+    "bridgeConfig": {
+      "title": "Pont du bot",
+      "description": "Configurez le point de terminaison WSS et le justificatif. Ce test vérifie uniquement le handshake actuel ; il n’active pas le relais des messages.",
+      "url": "URL WSS",
+      "token": "Jeton du pont",
+      "save": "Enregistrer",
+      "clear": "Effacer la configuration",
+      "test": "Tester la connexion",
+      "configured": "Configuré",
+      "notConfigured": "Non configuré",
+      "connected": "Connecté",
+      "notConnected": "Non connecté",
+      "testError": "Échec du test. Vérifiez la configuration et réessayez.",
+      "saved": "Configuration enregistrée.",
+      "cleared": "Configuration effacée.",
+      "testSuccess": "Handshake réussi.",
+      "required": "Saisissez l’URL WSS et le jeton."
     }
   }
 }

@@ -3452,7 +3452,7 @@
       "connecting": "Connecting…",
       "cooldownFallback": "In cooldown.",
       "cooldownResumesAt": "Resumes at {time}.",
-      "description": "Link a phone so Flo can send paid bills from it. The phone you connect is yours — its ban risk is on you.",
+      "description": "This creates a WhatsApp session owned by FloCafe on this computer; it does not connect the Polo Pizza bot. Disconnect this session before switching to the bot.",
       "disconnectConfirm": "Disconnect from WhatsApp? You will need to re-scan QR or pair again.",
       "disconnectCta": "Disconnect",
       "disconnectFailed": "Failed to disconnect.",
@@ -3476,12 +3476,12 @@
       "qrMethodWhere": "On your phone: WhatsApp → Settings → Linked Devices → Link a Device.",
       "qrRefreshHint": "QR refreshes automatically.",
       "startQr": "Start QR pairing",
-      "title": "Connect a phone",
+      "title": "WhatsApp directly on FloCafe",
       "usePairing": "Use pairing code"
     },
     "connection": {
       "enableInSettings": "Enable in Settings",
-      "notEnabled": "WhatsApp is not enabled on this tenant."
+      "notEnabled": "FloCafe works without WhatsApp. You can use the POS without connecting either option."
     },
     "enable": {
       "ackError": "Acknowledge the ban risk first.",
@@ -3609,6 +3609,24 @@
       "connection": "Connection",
       "inbox": "Inbox",
       "sent": "Sent"
+    },
+    "bridgeConfig": {
+      "title": "Polo Pizza bot",
+      "description": "Optional bot connection. The team configures its WSS address and token here; after the bridge connects, the bot's QR appears below. The WhatsApp session remains owned by the bot. The test checks only the handshake.",
+      "url": "WSS URL",
+      "token": "Bridge token",
+      "save": "Save configuration",
+      "clear": "Clear configuration",
+      "test": "Test connection",
+      "configured": "Configured",
+      "notConfigured": "Not configured",
+      "connected": "Connected",
+      "notConnected": "Not connected",
+      "testError": "Connection test failed. Check settings and try again.",
+      "saved": "Configuration saved.",
+      "cleared": "Configuration cleared.",
+      "testSuccess": "Handshake succeeded.",
+      "required": "Enter the WSS URL and token."
     }
   }
 }

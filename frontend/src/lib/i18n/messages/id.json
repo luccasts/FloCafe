@@ -3609,6 +3609,24 @@
       "connection": "Koneksi",
       "inbox": "Kotak masuk",
       "sent": "Terkirim"
+    },
+    "bridgeConfig": {
+      "title": "Jembatan bot",
+      "description": "Atur endpoint WSS dan kredensial. Tes ini hanya memeriksa handshake saat ini; tidak mengaktifkan penerusan pesan.",
+      "url": "Alamat WSS",
+      "token": "Token jembatan",
+      "save": "Simpan konfigurasi",
+      "clear": "Hapus konfigurasi",
+      "test": "Uji koneksi",
+      "configured": "Dikonfigurasi",
+      "notConfigured": "Belum dikonfigurasi",
+      "connected": "Terhubung",
+      "notConnected": "Tidak terhubung",
+      "testError": "Tes koneksi gagal. Periksa pengaturan dan coba lagi.",
+      "saved": "Konfigurasi tersimpan.",
+      "cleared": "Konfigurasi dihapus.",
+      "testSuccess": "Handshake berhasil.",
+      "required": "Masukkan URL WSS dan token."
     }
   }
 }

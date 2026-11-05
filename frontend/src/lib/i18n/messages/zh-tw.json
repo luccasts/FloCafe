@@ -3609,6 +3609,24 @@
       "connection": "連線",
       "inbox": "收件箱",
       "sent": "已傳送"
+    },
+    "bridgeConfig": {
+      "title": "機器人橋接",
+      "description": "設定 WSS 端點和憑證。此測試僅檢查目前握手，不會啟用訊息轉送。",
+      "url": "WSS 網址",
+      "token": "橋接權杖",
+      "save": "儲存設定",
+      "clear": "清除設定",
+      "test": "測試連線",
+      "configured": "已設定",
+      "notConfigured": "未設定",
+      "connected": "已連線",
+      "notConnected": "未連線",
+      "testError": "連線測試失敗。請檢查設定後重試。",
+      "saved": "設定已儲存。",
+      "cleared": "設定已清除。",
+      "testSuccess": "握手成功。",
+      "required": "請輸入 WSS 網址和權杖。"
     }
   }
 }

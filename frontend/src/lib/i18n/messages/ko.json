@@ -3609,6 +3609,24 @@
       "connection": "연결",
       "inbox": "수신함",
       "sent": "보냄"
+    },
+    "bridgeConfig": {
+      "title": "봇 브리지",
+      "description": "WSS 엔드포인트와 인증 정보를 구성합니다. 이 테스트는 현재 핸드셰이크만 확인하며 메시지 릴레이를 활성화하지 않습니다.",
+      "url": "WSS 주소",
+      "token": "브리지 토큰",
+      "save": "구성 저장",
+      "clear": "구성 지우기",
+      "test": "연결 테스트",
+      "configured": "구성됨",
+      "notConfigured": "구성되지 않음",
+      "connected": "연결됨",
+      "notConnected": "연결되지 않음",
+      "testError": "연결 테스트에 실패했습니다. 설정을 확인하고 다시 시도하세요.",
+      "saved": "구성이 저장되었습니다.",
+      "cleared": "구성이 삭제되었습니다.",
+      "testSuccess": "핸드셰이크에 성공했습니다.",
+      "required": "WSS URL과 토큰을 입력하세요."
     }
   }
 }

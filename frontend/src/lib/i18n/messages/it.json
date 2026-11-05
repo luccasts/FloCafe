@@ -3609,6 +3609,24 @@
       "connection": "Connessione",
       "inbox": "Posta in arrivo",
       "sent": "Inviati"
+    },
+    "bridgeConfig": {
+      "title": "Bridge bot",
+      "description": "Configura endpoint WSS e credenziali. Il test verifica solo l’handshake corrente e non abilita l’inoltro dei messaggi.",
+      "url": "URL WSS",
+      "token": "Token bridge",
+      "save": "Salva configurazione",
+      "clear": "Cancella configurazione",
+      "test": "Verifica connessione",
+      "configured": "Configurato",
+      "notConfigured": "Non configurato",
+      "connected": "Connesso",
+      "notConnected": "Non connesso",
+      "testError": "Test di connessione non riuscito. Controlla le impostazioni e riprova.",
+      "saved": "Configurazione salvata.",
+      "cleared": "Configurazione cancellata.",
+      "testSuccess": "Handshake riuscito.",
+      "required": "Inserisci URL WSS e token."
     }
   }
 }

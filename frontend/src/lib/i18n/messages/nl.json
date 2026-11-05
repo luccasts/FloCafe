@@ -3609,6 +3609,24 @@
       "connection": "Verbinding",
       "inbox": "Inbox",
       "sent": "Verzonden"
+    },
+    "bridgeConfig": {
+      "title": "Botbrug",
+      "description": "Configureer het WSS-eindpunt en de aanmeldgegevens. Deze test controleert alleen de huidige handshake; berichten doorsturen wordt niet ingeschakeld.",
+      "url": "WSS-adres",
+      "token": "Brugtoken",
+      "save": "Configuratie opslaan",
+      "clear": "Configuratie wissen",
+      "test": "Verbinding testen",
+      "configured": "Geconfigureerd",
+      "notConfigured": "Niet geconfigureerd",
+      "connected": "Verbonden",
+      "notConnected": "Niet verbonden",
+      "testError": "Verbindingstest mislukt. Controleer de instellingen en probeer het opnieuw.",
+      "saved": "Configuratie opgeslagen.",
+      "cleared": "Configuratie gewist.",
+      "testSuccess": "Handshake geslaagd.",
+      "required": "Voer de WSS-URL en token in."
     }
   }
 }

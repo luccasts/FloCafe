@@ -10,6 +10,7 @@
     "format": "oxfmt \"src/**/*.{js,jsx,ts,tsx,mjs,cjs,mts,cts}\" \"e2e/**/*.{js,jsx,ts,tsx,mjs,cjs,mts,cts}\" \"next.config.ts\" \"playwright.config.ts\" \"playwright.electron.config.ts\" \"postcss.config.mjs\"",
     "format:check": "oxfmt --check \"src/**/*.{js,jsx,ts,tsx,mjs,cjs,mts,cts}\" \"e2e/**/*.{js,jsx,ts,tsx,mjs,cjs,mts,cts}\" \"next.config.ts\" \"playwright.config.ts\" \"playwright.electron.config.ts\" \"postcss.config.mjs\"",
     "test:e2e": "playwright test --config=playwright.config.ts --project=chromium",
+    "test:inbox-model": "ts-node --transpile-only -P ../tests/tsconfig.json e2e/whatsapp-inbox-model.test.ts",
     "test:e2e:electron": "playwright test --config=playwright.electron.config.ts --project=electron-desktop"
   },
   "dependencies": {

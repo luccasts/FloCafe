@@ -3609,6 +3609,24 @@
       "connection": "Conexión",
       "inbox": "Bandeja de entrada",
       "sent": "Enviados"
+    },
+    "bridgeConfig": {
+      "title": "Puente del bot",
+      "description": "Configura el endpoint WSS y la credencial. Esta prueba solo verifica el handshake actual; no activa el reenvío de mensajes.",
+      "url": "URL WSS",
+      "token": "Token del puente",
+      "save": "Guardar configuración",
+      "clear": "Borrar configuración",
+      "test": "Probar conexión",
+      "configured": "Configurado",
+      "notConfigured": "Sin configurar",
+      "connected": "Conectado",
+      "notConnected": "No conectado",
+      "testError": "Error en la prueba. Revisa la configuración e inténtalo de nuevo.",
+      "saved": "Configuración guardada.",
+      "cleared": "Configuración borrada.",
+      "testSuccess": "Handshake correcto.",
+      "required": "Introduce la URL WSS y el token."
     }
   }
 }

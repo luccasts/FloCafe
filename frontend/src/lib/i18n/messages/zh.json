@@ -3609,6 +3609,24 @@
       "connection": "连接",
       "inbox": "收件箱",
       "sent": "已发送"
+    },
+    "bridgeConfig": {
+      "title": "机器人桥接",
+      "description": "配置 WSS 端点和凭据。此测试仅检查当前握手，不会启用消息转发。",
+      "url": "WSS 地址",
+      "token": "桥接令牌",
+      "save": "保存配置",
+      "clear": "清除配置",
+      "test": "测试连接",
+      "configured": "已配置",
+      "notConfigured": "未配置",
+      "connected": "已连接",
+      "notConnected": "未连接",
+      "testError": "连接测试失败。请检查设置后重试。",
+      "saved": "配置已保存。",
+      "cleared": "配置已清除。",
+      "testSuccess": "握手成功。",
+      "required": "请输入 WSS 地址和令牌。"
     }
   }
 }

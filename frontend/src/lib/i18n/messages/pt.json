@@ -3452,7 +3452,7 @@
       "connecting": "Conectando…",
       "cooldownFallback": "Em espera.",
       "cooldownResumesAt": "Retoma às {time}.",
-      "description": "Vincule um telefone para que o Flo possa enviar contas pagas por ele. O telefone que você conecta é seu — o risco de banimento é por sua conta.",
+      "description": "Esta opção cria uma sessão do WhatsApp pertencente ao FloCafe neste computador; não conecta o bot da Polo Pizza. Desconecte esta sessão antes de trocar para o bot.",
       "disconnectConfirm": "Desconectar do WhatsApp? Você precisará escanear o QR ou parear novamente.",
       "disconnectCta": "Desconectar",
       "disconnectFailed": "Falha ao desconectar.",
@@ -3476,12 +3476,12 @@
       "qrMethodWhere": "No seu telefone: WhatsApp → Configurações → Dispositivos Vinculados → Vincular um Dispositivo.",
       "qrRefreshHint": "O QR é atualizado automaticamente.",
       "startQr": "Iniciar pareamento por QR",
-      "title": "Conectar um telefone",
+      "title": "WhatsApp direto no FloCafe",
       "usePairing": "Usar código de pareamento"
     },
     "connection": {
       "enableInSettings": "Ativar nas Configurações",
-      "notEnabled": "O WhatsApp não está ativado neste estabelecimento."
+      "notEnabled": "O FloCafe funciona sem WhatsApp. Você pode usar o PDV sem conectar nenhuma das opções."
     },
     "enable": {
       "ackError": "Reconheça o risco de banimento primeiro.",
@@ -3609,6 +3609,24 @@
       "connection": "Conexão",
       "inbox": "Caixa de Entrada",
       "sent": "Enviadas"
+    },
+    "bridgeConfig": {
+      "title": "Bot da Polo Pizza",
+      "description": "Conexão opcional ao bot. A equipe configura aqui o endereço WSS e o token; quando a ponte conectar, o QR do bot aparece abaixo. A sessão do WhatsApp continua pertencendo ao bot. O teste verifica apenas o handshake.",
+      "url": "URL WSS",
+      "token": "Token da ponte",
+      "save": "Salvar configuração",
+      "clear": "Limpar configuração",
+      "test": "Testar conexão",
+      "configured": "Configurado",
+      "notConfigured": "Não configurado",
+      "connected": "Conectado",
+      "notConnected": "Não conectado",
+      "testError": "Falha no teste. Verifique as configurações e tente novamente.",
+      "saved": "Configuração salva.",
+      "cleared": "Configuração removida.",
+      "testSuccess": "Handshake concluído.",
+      "required": "Informe a URL WSS e o token."
     }
   }
 }

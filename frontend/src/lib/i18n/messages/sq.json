@@ -3609,6 +3609,24 @@
       "connection": "Lidhja",
       "inbox": "Të ardhura",
       "sent": "Dërguar"
+    },
+    "bridgeConfig": {
+      "title": "Ura e botit",
+      "description": "Konfiguroni pikën WSS dhe kredencialet. Ky test kontrollon vetëm handshake-in aktual dhe nuk aktivizon përcjelljen e mesazheve.",
+      "url": "Adresa WSS",
+      "token": "Tokeni i urës",
+      "save": "Ruaj konfigurimin",
+      "clear": "Pastro konfigurimin",
+      "test": "Testo lidhjen",
+      "configured": "Konfiguruar",
+      "notConfigured": "Pa konfigurim",
+      "connected": "Lidhur",
+      "notConnected": "Pa lidhje",
+      "testError": "Testi i lidhjes dështoi. Kontrolloni cilësimet dhe provoni përsëri.",
+      "saved": "Konfigurimi u ruajt.",
+      "cleared": "Konfigurimi u pastrua.",
+      "testSuccess": "Handshake u krye me sukses.",
+      "required": "Shkruani adresën WSS dhe tokenin."
     }
   }
 }

@@ -10,8 +10,46 @@ import * as whatsapp from '../services/whatsapp';
 import * as QRCode from 'qrcode';
 import { parsePhoneE164 } from '../lib/phone';
 import { sendHumanReplyToWhatsAppBot, WhatsAppBotReplyError } from '../whatsapp-bot-reply';
+import { clearBotBridgeConfig, configureBotBridgeOperations, getBotBridgeConfig, getBotBridgePairingStatus, getBotBridgeStatus, saveBotBridgeConfig, sendHumanReplyViaBotBridge, startBotBridge, testBotBridgeConnection } from '../services/whatsapp-bot-bridge';
 
 const router = Router();
+configureBotBridgeOperations({ ingest: ingestWhatsAppMessage, takeover: (phone) => whatsapp.getTakeoverState(phone), isPhoneBlocked: (phone) => whatsapp.isPhoneBlocked(phone) });
+startBotBridge();
+const ownerBridge = (req: Request, res: Response, next: NextFunction) => {
+  if ((req as Request & { user?: { role?: string } }).user?.role !== 'owner') return res.status(403).json({ error: 'owner_required', reason: 'owner_required' });
+  return next();
+};
+
+router.get('/bot-bridge/config', requirePermission('whatsapp.manage'), ownerBridge, (_req, res) => {
+  res.json({ ...getBotBridgeConfig(), ...getBotBridgeStatus() });
+});
+
+router.post('/bot-bridge/config', requirePermission('whatsapp.manage'), ownerBridge, (req, res) => {
+  const { url, token, clear } = req.body ?? {};
+  try {
+    if (clear === true) clearBotBridgeConfig();
+    else saveBotBridgeConfig(url, token);
+    res.json({ ok: true, ...getBotBridgeConfig() });
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : 'invalid_config';
+    res.status(reason === 'secure_storage_unavailable' ? 503 : 400).json({ error: reason });
+  }
+});
+
+router.post('/bot-bridge/test', requirePermission('whatsapp.manage'), ownerBridge, async (_req, res) => {
+  const connected = await testBotBridgeConnection();
+  res.status(connected ? 200 : 502).json({ status: connected ? 'connected' : 'error' });
+});
+
+router.get('/bot-bridge/pairing', requirePermission('whatsapp.manage'), ownerBridge, asyncHandler(async (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store, max-age=0');
+  res.setHeader('Pragma', 'no-cache');
+  const status = getBotBridgePairingStatus();
+  const qrDataUrl = status.state === 'waiting_qr' && status.qr
+    ? await QRCode.toDataURL(status.qr, { margin: 1, width: 320 })
+    : null;
+  res.json({ state: status.state, qrDataUrl, expiresAt: status.expiresAt });
+}));
 
 function parsePaginationParam(value: unknown, fallback: number, max?: number): number | null {
   if (value === undefined) return fallback;
@@ -497,16 +535,24 @@ router.post(
       return;
     }
 
+    const useBridge = getBotBridgeConfig().configured;
     try {
-      await trackHttpRequestWork(req, sendHumanReplyToWhatsAppBot(msg.phone_e164, text));
+      if (useBridge) await trackHttpRequestWork(req, sendHumanReplyViaBotBridge(msg.phone_e164, text));
+      else await trackHttpRequestWork(req, sendHumanReplyToWhatsAppBot(msg.phone_e164, text));
     } catch (error) {
-      const configurationError =
-        error instanceof WhatsAppBotReplyError && error.code !== 'callback_failed';
-      res.status(configurationError ? 503 : 502).json({
-        error: configurationError
-          ? 'WhatsApp bot reply transport is not configured correctly'
-          : 'WhatsApp bot could not confirm the reply',
-        reason: configurationError ? 'bot_reply_not_configured' : 'bot_reply_failed',
+      const bridgeDisconnected = useBridge && error instanceof Error && error.message === 'bridge_disconnected';
+      const directConfigurationError = !useBridge && error instanceof WhatsAppBotReplyError && error.code !== 'callback_failed';
+      res.status(bridgeDisconnected || directConfigurationError ? 503 : 502).json({
+        error: bridgeDisconnected
+          ? 'WhatsApp bot bridge is disconnected'
+          : directConfigurationError
+            ? 'WhatsApp bot reply transport is not configured correctly'
+            : 'WhatsApp bot could not confirm the reply',
+        reason: bridgeDisconnected
+          ? 'bot_bridge_disconnected'
+          : directConfigurationError
+            ? 'bot_reply_not_configured'
+            : 'bot_reply_failed',
       });
       return;
     }

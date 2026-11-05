@@ -1,7 +1,12 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo, useLayoutEffect } from 'react';
 import api from '@/lib/api';
+import {
+  buildInboxHistoryRequest,
+  groupInboxConversations,
+  sameRows,
+} from '@/lib/whatsapp-inbox-model';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -142,6 +147,15 @@ interface InboxMessage {
   queued_at: string;
   takeover_state?: 'free' | 'taken';
   takeover_taken_by?: string | null;
+}
+
+interface InboxHistoryMessage {
+  id: number;
+  phone_e164: string;
+  body: string;
+  direction: 'inbound' | 'outbound';
+  kind?: string;
+  queued_at: string;
 }
 
 interface BlocklistRow {
@@ -286,6 +300,7 @@ export default function WhatsAppPage() {
   const tSend = useTranslations('whatsapp.send');
   const tStatus = useTranslations('whatsapp.status');
   const tSettings = useTranslations('settings');
+  const tBridge = useTranslations('whatsapp.bridgeConfig');
   const { confirm, ConfirmDialog } = useConfirm();
   const setWhatsappEnabled = usePosSettingsStore((s) => s.setWhatsappEnabled);
   const { currentTenant } = useAuthStore();
@@ -315,6 +330,13 @@ export default function WhatsAppPage() {
   const [sentMessages, setSentMessages] = useState<SentMessage[]>([]);
   const [retryingIds, setRetryingIds] = useState<Set<number>>(() => new Set());
   const [inbox, setInbox] = useState<InboxMessage[]>([]);
+  const [selectedConversationPhone, setSelectedConversationPhone] = useState<string | null>(null);
+  const [conversationHistory, setConversationHistory] = useState<InboxHistoryMessage[]>([]);
+  const [conversationHistoryLoading, setConversationHistoryLoading] = useState(false);
+  const conversationHistoryRequest = useRef(0);
+  const conversationHistoryPhone = useRef<string | null>(null);
+  const conversationHistoryScrollRef = useRef<HTMLDivElement | null>(null);
+  const followLatestConversationMessage = useRef(true);
   const [replyDrafts, setReplyDrafts] = useState<Record<number, string>>({});
   const [sendingReplyId, setSendingReplyId] = useState<number | null>(null);
   const [blocklist, setBlocklist] = useState<BlocklistRow[]>([]);
@@ -340,7 +362,22 @@ export default function WhatsAppPage() {
     if (typeof window === 'undefined') return null;
     return window.localStorage.getItem('whatsapp.activeTab');
   });
+  const [connectionChoice, setConnectionChoice] = useState<'local' | 'bot' | null>(null);
   const [filterGroups, setFilterGroupsState] = useState(true);
+  const [bridgeUrl, setBridgeUrl] = useState('');
+  const [bridgeToken, setBridgeToken] = useState('');
+  const [bridgeConfigured, setBridgeConfigured] = useState(false);
+  const [bridgeDirty, setBridgeDirty] = useState(false);
+  const [bridgeLoading, setBridgeLoading] = useState(true);
+  const bridgeDirtyRef = useRef(false);
+  const [bridgeSaving, setBridgeSaving] = useState(false);
+  const [bridgeTesting, setBridgeTesting] = useState(false);
+  const [bridgeConnected, setBridgeConnected] = useState<boolean | null>(null);
+  const [bridgeError, setBridgeError] = useState(false);
+  const [botPairingState, setBotPairingState] = useState<
+    'unavailable' | 'connecting' | 'waiting_qr' | 'connected' | 'disconnected'
+  >('unavailable');
+  const [botPairingQrDataUrl, setBotPairingQrDataUrl] = useState<string | null>(null);
 
   const refreshStatus = useCallback(async () => {
     try {
@@ -353,41 +390,86 @@ export default function WhatsAppPage() {
   }, []);
 
   const defaultTab = status?.state === 'connected' ? 'sent' : 'connection';
+  const inboxConversations = useMemo(
+    () => groupInboxConversations(inbox, sentMessages, blocklist),
+    [blocklist, inbox, sentMessages],
+  );
+  const activeConversationPhone =
+    selectedConversationPhone &&
+    inboxConversations.some((conversation) => conversation.phone_e164 === selectedConversationPhone)
+      ? selectedConversationPhone
+      : (inboxConversations[0]?.phone_e164 ?? null);
+  const selectedConversation = inboxConversations.find(
+    (conversation) => conversation.phone_e164 === activeConversationPhone,
+  );
+  useEffect(() => {
+    if (!selectedConversationPhone && activeConversationPhone) {
+      // Pin the initial default conversation so new arrivals do not switch the open thread.
+      // oxlint-disable-next-line react-hooks/set-state-in-effect
+      setSelectedConversationPhone(activeConversationPhone);
+    }
+  }, [activeConversationPhone, selectedConversationPhone]);
+  const latestSelectedInbound = useMemo(() => {
+    if (!activeConversationPhone) return undefined;
+    return inbox
+      .filter((message) => message.phone_e164 === activeConversationPhone)
+      .reduce<InboxMessage | undefined>(
+        (latest, message) => (!latest || message.queued_at > latest.queued_at ? message : latest),
+        undefined,
+      );
+  }, [activeConversationPhone, inbox]);
+  const effectiveConnectionChoice =
+    connectionChoice ?? (bridgeConfigured ? 'bot' : status?.enabled ? 'local' : null);
   const effectiveTab =
     (userTab === 'inbox' || userTab === 'automation') && !isAdmin
       ? defaultTab
       : (userTab ?? defaultTab);
+  useLayoutEffect(() => {
+    followLatestConversationMessage.current = true;
+  }, [activeConversationPhone, effectiveTab]);
+  useEffect(() => {
+    if (!activeConversationPhone || conversationHistoryLoading || effectiveTab !== 'inbox') return;
+    // Tabs can mount their content after the parent commits.
+    const frame = requestAnimationFrame(() => {
+      const element = conversationHistoryScrollRef.current;
+      if (element && followLatestConversationMessage.current) {
+        element.scrollTop = element.scrollHeight;
+      }
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [activeConversationPhone, conversationHistory, conversationHistoryLoading, effectiveTab]);
   const onTabChange = (v: string) => {
     setUserTab(v);
     if (typeof window !== 'undefined') window.localStorage.setItem('whatsapp.activeTab', v);
   };
 
   const refreshQr = useCallback(async () => {
-    if (!isAdmin) return;
+    if (!isAdmin || bridgeConfigured || effectiveConnectionChoice !== 'local') return;
     try {
       const { data } = await api.get('/whatsapp/qr');
       setQrDataUrl(data.dataUrl);
     } catch {
       setQrDataUrl(null);
     }
-  }, [isAdmin]);
+  }, [isAdmin, bridgeConfigured, effectiveConnectionChoice]);
 
   const refreshPairing = useCallback(async () => {
-    if (!isAdmin) return;
+    if (!isAdmin || bridgeConfigured || effectiveConnectionChoice !== 'local') return;
     try {
       const { data } = await api.get('/whatsapp/pairing-code');
       setPairingCode(data.code);
     } catch {
       setPairingCode(null);
     }
-  }, [isAdmin]);
+  }, [isAdmin, bridgeConfigured, effectiveConnectionChoice]);
 
   const refreshSent = useCallback(async () => {
     try {
       const { data } = await api.get('/whatsapp/messages', {
         params: { direction: 'outbound', limit: 100 },
       });
-      setSentMessages(data.messages ?? []);
+      const nextMessages = data.messages ?? [];
+      setSentMessages((current) => (sameRows(current, nextMessages) ? current : nextMessages));
     } catch {
       /* ignore */
     }
@@ -397,11 +479,41 @@ export default function WhatsAppPage() {
     if (!isAdmin) return;
     try {
       const { data } = await api.get('/whatsapp/inbox', { params: { limit: 100 } });
-      setInbox(data.messages ?? []);
+      const nextMessages = data.messages ?? [];
+      setInbox((current) => (sameRows(current, nextMessages) ? current : nextMessages));
     } catch {
       /* ignore */
     }
   }, [isAdmin]);
+
+  const refreshConversationHistory = useCallback(async (phone: string) => {
+    const requestId = ++conversationHistoryRequest.current;
+    const isInitialLoadForPhone = conversationHistoryPhone.current !== phone;
+    if (isInitialLoadForPhone) setConversationHistoryLoading(true);
+    const request = buildInboxHistoryRequest(phone);
+    try {
+      const { data } = await api.get(request.endpoint, { params: request.params });
+      if (requestId === conversationHistoryRequest.current) {
+        const nextMessages = data.messages ?? [];
+        setConversationHistory((current) =>
+          sameRows(current, nextMessages) ? current : nextMessages,
+        );
+        conversationHistoryPhone.current = phone;
+      }
+    } catch {
+      if (requestId === conversationHistoryRequest.current && isInitialLoadForPhone) {
+        setConversationHistory([]);
+      }
+    } finally {
+      if (requestId === conversationHistoryRequest.current) setConversationHistoryLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!activeConversationPhone || !isAdmin) return;
+    // oxlint-disable-next-line react-hooks/set-state-in-effect
+    void refreshConversationHistory(activeConversationPhone);
+  }, [activeConversationPhone, isAdmin, refreshConversationHistory]);
 
   const refreshBlocklist = useCallback(async () => {
     if (!isAdmin) return;
@@ -429,6 +541,88 @@ export default function WhatsAppPage() {
     }
   }, [isAdmin]);
 
+  const refreshBridgeStatus = useCallback(async () => {
+    try {
+      const { data } = await api.get('/whatsapp/bot-bridge/config');
+      setBridgeConfigured(data?.configured === true);
+      setBridgeConnected(data?.configured === true ? data?.connected === true : null);
+      if (!bridgeDirtyRef.current) setBridgeUrl(typeof data?.url === 'string' ? data.url : '');
+      setBridgeError(false);
+      setBridgeLoading(false);
+    } catch {
+      setBridgeError(true);
+      setBridgeConnected(false);
+      setBridgeLoading(false);
+    }
+  }, []);
+
+  const refreshBotPairing = useCallback(async () => {
+    if (!isOwnerRole || !bridgeConfigured) return;
+    try {
+      const { data } = await api.get('/whatsapp/bot-bridge/pairing');
+      const states = ['unavailable', 'connecting', 'waiting_qr', 'connected', 'disconnected'];
+      setBotPairingState(states.includes(data?.state) ? data.state : 'unavailable');
+      setBotPairingQrDataUrl(typeof data?.qrDataUrl === 'string' ? data.qrDataUrl : null);
+    } catch {
+      setBotPairingState('unavailable');
+      setBotPairingQrDataUrl(null);
+    }
+  }, [bridgeConfigured, isOwnerRole]);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    // oxlint-disable-next-line react-hooks/set-state-in-effect
+    void refreshBridgeStatus();
+  }, [isAdmin, refreshBridgeStatus]);
+
+  useEffect(() => {
+    if (!isOwnerRole || !bridgeConfigured) return;
+    // oxlint-disable-next-line react-hooks/set-state-in-effect
+    void refreshBotPairing();
+    const id = setInterval(() => {
+      void refreshBotPairing();
+    }, 2500);
+    return () => clearInterval(id);
+  }, [bridgeConfigured, isOwnerRole, refreshBotPairing]);
+
+  const saveBridgeConfig = async (clear = false) => {
+    setBridgeSaving(true);
+    setBridgeError(false);
+    setBridgeConnected(null);
+    try {
+      const { data } = await api.post(
+        '/whatsapp/bot-bridge/config',
+        clear ? { clear: true } : { url: bridgeUrl.trim(), token: bridgeToken },
+      );
+      setBridgeConfigured(data?.configured === true);
+      if (clear) setBridgeUrl('');
+      setBridgeToken('');
+      setBridgeDirty(false);
+      bridgeDirtyRef.current = false;
+      toast.success(clear ? tBridge('cleared') : tBridge('saved'));
+    } catch {
+      setBridgeError(true);
+    } finally {
+      setBridgeSaving(false);
+    }
+  };
+
+  const testBridgeConnection = async () => {
+    setBridgeTesting(true);
+    setBridgeError(false);
+    setBridgeConnected(null);
+    try {
+      await api.post('/whatsapp/bot-bridge/test');
+      setBridgeConnected(true);
+      toast.success(tBridge('testSuccess'));
+    } catch {
+      setBridgeConnected(false);
+      setBridgeError(true);
+    } finally {
+      setBridgeTesting(false);
+    }
+  };
+
   useEffect(() => {
     // oxlint-disable-next-line react-hooks/set-state-in-effect
     void refreshStatus();
@@ -438,13 +632,30 @@ export default function WhatsAppPage() {
     const id = setInterval(() => {
       void refreshStatus();
       void refreshSent();
-      if (isAdmin) void refreshInbox();
+      if (isAdmin) {
+        void refreshInbox();
+        void refreshBridgeStatus();
+        if (activeConversationPhone) void refreshConversationHistory(activeConversationPhone);
+      }
     }, 5000);
     return () => clearInterval(id);
-  }, [isAdmin, refreshInbox, refreshStatus, refreshSent]);
+  }, [
+    isAdmin,
+    refreshInbox,
+    refreshStatus,
+    refreshSent,
+    refreshBridgeStatus,
+    refreshConversationHistory,
+    activeConversationPhone,
+  ]);
 
   useEffect(() => {
     if (!isAdmin) return;
+    if (bridgeConfigured) {
+      // oxlint-disable-next-line react-hooks/set-state-in-effect
+      setQrDataUrl(null);
+      return undefined;
+    }
     if (status?.state === 'waiting_qr') {
       // oxlint-disable-next-line react-hooks/set-state-in-effect
       void refreshQr();
@@ -453,10 +664,15 @@ export default function WhatsAppPage() {
     }
     setQrDataUrl(null);
     return undefined;
-  }, [status?.state, isAdmin, refreshQr]);
+  }, [status?.state, isAdmin, bridgeConfigured, refreshQr]);
 
   useEffect(() => {
     if (!isAdmin) return;
+    if (bridgeConfigured) {
+      // oxlint-disable-next-line react-hooks/set-state-in-effect
+      setPairingCode(null);
+      return undefined;
+    }
     if (status?.state === 'waiting_pairing') {
       // oxlint-disable-next-line react-hooks/set-state-in-effect
       void refreshPairing();
@@ -465,7 +681,7 @@ export default function WhatsAppPage() {
     }
     setPairingCode(null);
     return undefined;
-  }, [status?.state, isAdmin, refreshPairing]);
+  }, [status?.state, isAdmin, bridgeConfigured, refreshPairing]);
 
   useEffect(() => {
     // oxlint-disable-next-line react-hooks/set-state-in-effect
@@ -755,13 +971,17 @@ export default function WhatsAppPage() {
 
   const sendInboxReply = async (messageId: number) => {
     const body = replyDrafts[messageId]?.trim();
-    if (!body || sendingReplyId !== null) return;
+    const targetPhone =
+      inbox.find((message) => message.id === messageId)?.phone_e164 ?? activeConversationPhone;
+    if (!body || sendingReplyId !== null || !targetPhone) return;
     setSendingReplyId(messageId);
     try {
       await api.post(`/whatsapp/inbox/${messageId}/reply`, { body });
       setReplyDrafts((current) => ({ ...current, [messageId]: '' }));
       toast.success(tInbox('replySuccess'));
+      followLatestConversationMessage.current = true;
       await refreshInbox();
+      await refreshConversationHistory(targetPhone);
     } catch (err) {
       toastApiError(err, tInbox('replyFailed'), tApiError);
     } finally {
@@ -786,7 +1006,21 @@ export default function WhatsAppPage() {
       <div className="space-y-4 p-2">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-semibold">{tNav('whatsapp')}</h1>
-          {status && (
+          {bridgeConfigured ? (
+            <Badge
+              variant={
+                botPairingState === 'connected'
+                  ? 'default'
+                  : botPairingState === 'disconnected' || botPairingState === 'unavailable'
+                    ? 'destructive'
+                    : 'secondary'
+              }
+            >
+              {botPairingState === 'unavailable'
+                ? tBridge('notConnected')
+                : tState(botPairingState as WhatsAppStateKey)}
+            </Badge>
+          ) : status ? (
             <Badge
               variant={
                 status.state === 'connected'
@@ -810,35 +1044,38 @@ export default function WhatsAppPage() {
                 </>
               ) : null}
             </Badge>
-          )}
+          ) : null}
         </div>
 
-        {status?.lastError && status.state !== 'cooldown' && (
-          <div
-            role="alert"
-            className={`rounded-md border px-3 py-2 text-sm flex items-center justify-between gap-2 ${
-              status.lastErrorReason === 'logged_out'
-                ? 'border-destructive/40 bg-destructive/10 text-destructive'
-                : 'border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-300'
-            }`}
-          >
-            <div className="flex items-center gap-2">
-              {status.lastErrorReason === 'logged_out' ? (
-                <XCircle className="size-4 shrink-0" />
-              ) : (
-                <AlertTriangle className="size-4 shrink-0" />
+        {effectiveConnectionChoice === 'local' &&
+          !bridgeConfigured &&
+          status?.lastError &&
+          status.state !== 'cooldown' && (
+            <div
+              role="alert"
+              className={`rounded-md border px-3 py-2 text-sm flex items-center justify-between gap-2 ${
+                status.lastErrorReason === 'logged_out'
+                  ? 'border-destructive/40 bg-destructive/10 text-destructive'
+                  : 'border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-300'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                {status.lastErrorReason === 'logged_out' ? (
+                  <XCircle className="size-4 shrink-0" />
+                ) : (
+                  <AlertTriangle className="size-4 shrink-0" />
+                )}
+                <span>
+                  {translateLastError(status.lastErrorReason, status.lastError, tLastError)}
+                </span>
+              </div>
+              {effectiveTab !== 'connection' && (
+                <Button variant="outline" size="sm" onClick={() => onTabChange('connection')}>
+                  {tTabs('connection')}
+                </Button>
               )}
-              <span>
-                {translateLastError(status.lastErrorReason, status.lastError, tLastError)}
-              </span>
             </div>
-            {effectiveTab !== 'connection' && (
-              <Button variant="outline" size="sm" onClick={() => onTabChange('connection')}>
-                {tTabs('connection')}
-              </Button>
-            )}
-          </div>
-        )}
+          )}
 
         <Tabs value={effectiveTab} onValueChange={onTabChange}>
           <TabsList>
@@ -861,7 +1098,200 @@ export default function WhatsAppPage() {
           </TabsList>
 
           <TabsContent value="connection" className="space-y-4">
-            {!status?.enabled && (
+            {isAdmin && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>{tTabs('connection')}</CardTitle>
+                  <CardDescription>{tConnection('notEnabled')}</CardDescription>
+                </CardHeader>
+                <CardContent className="grid gap-3 md:grid-cols-2">
+                  <Button
+                    type="button"
+                    variant={effectiveConnectionChoice === 'local' ? 'default' : 'outline'}
+                    className="h-auto whitespace-normal p-4 text-left"
+                    aria-pressed={effectiveConnectionChoice === 'local'}
+                    disabled={bridgeConfigured}
+                    onClick={() => setConnectionChoice('local')}
+                  >
+                    <span className="flex flex-col items-start gap-1">
+                      <span>{tConnect('title')}</span>
+                      <span className="text-xs font-normal opacity-80">
+                        {tConnect('description')}
+                      </span>
+                    </span>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={effectiveConnectionChoice === 'bot' ? 'default' : 'outline'}
+                    className="h-auto whitespace-normal p-4 text-left"
+                    aria-pressed={effectiveConnectionChoice === 'bot'}
+                    disabled={!bridgeConfigured && status?.state === 'connected'}
+                    onClick={() => setConnectionChoice('bot')}
+                  >
+                    <span className="flex flex-col items-start gap-1">
+                      <span>{tBridge('title')}</span>
+                      <span className="text-xs font-normal opacity-80">
+                        {tBridge('description')}
+                      </span>
+                    </span>
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+
+            {isAdmin && effectiveConnectionChoice === 'bot' && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>{tBridge('title')}</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-1">
+                    <label htmlFor="wa-bridge-url" className="text-sm font-medium">
+                      {tBridge('url')}
+                    </label>
+                    <Input
+                      id="wa-bridge-url"
+                      type="url"
+                      dir="ltr"
+                      autoComplete="url"
+                      value={bridgeUrl}
+                      disabled={bridgeLoading || bridgeSaving || bridgeTesting}
+                      onChange={(e) => {
+                        setBridgeUrl(e.target.value);
+                        setBridgeDirty(true);
+                        bridgeDirtyRef.current = true;
+                      }}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label htmlFor="wa-bridge-token" className="text-sm font-medium">
+                      {tBridge('token')}
+                    </label>
+                    <Input
+                      id="wa-bridge-token"
+                      type="password"
+                      autoComplete="new-password"
+                      value={bridgeToken}
+                      disabled={bridgeLoading || bridgeSaving || bridgeTesting}
+                      onChange={(e) => {
+                        setBridgeToken(e.target.value);
+                        setBridgeDirty(true);
+                        bridgeDirtyRef.current = true;
+                      }}
+                    />
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant={bridgeConfigured ? 'default' : 'secondary'}>
+                      {bridgeConfigured ? tBridge('configured') : tBridge('notConfigured')}
+                    </Badge>
+                    {bridgeConnected !== null && (
+                      <Badge variant={bridgeConnected ? 'default' : 'destructive'}>
+                        {bridgeConnected ? tBridge('connected') : tBridge('notConnected')}
+                      </Badge>
+                    )}
+                    <Button
+                      type="button"
+                      disabled={
+                        bridgeLoading ||
+                        bridgeSaving ||
+                        bridgeTesting ||
+                        !bridgeUrl.trim() ||
+                        !bridgeToken
+                      }
+                      onClick={() => void saveBridgeConfig()}
+                    >
+                      {bridgeSaving && <Loader2 className="size-4 animate-spin" />}
+                      {tBridge('save')}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={bridgeLoading || bridgeSaving || bridgeTesting || !bridgeConfigured}
+                      onClick={() => void saveBridgeConfig(true)}
+                    >
+                      {tBridge('clear')}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={
+                        bridgeLoading ||
+                        bridgeSaving ||
+                        bridgeTesting ||
+                        !bridgeConfigured ||
+                        bridgeDirty
+                      }
+                      onClick={() => void testBridgeConnection()}
+                    >
+                      {bridgeTesting && <Loader2 className="size-4 animate-spin" />}
+                      {tBridge('test')}
+                    </Button>
+                  </div>
+                  {bridgeError && (
+                    <p role="alert" className="text-sm text-destructive">
+                      {tBridge('testError')}
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {isOwnerRole && bridgeConfigured && effectiveConnectionChoice === 'bot' && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>{tConnect('title')}</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <Badge
+                    variant={
+                      botPairingState === 'connected'
+                        ? 'default'
+                        : botPairingState === 'disconnected' || botPairingState === 'unavailable'
+                          ? 'destructive'
+                          : 'secondary'
+                    }
+                  >
+                    {botPairingState === 'unavailable'
+                      ? tBridge('notConnected')
+                      : tState(botPairingState as WhatsAppStateKey)}
+                  </Badge>
+                  {botPairingState === 'waiting_qr' && (
+                    <div className="space-y-2">
+                      <p className="text-sm text-muted-foreground">{tConnect('qrInstruction')}</p>
+                      {botPairingQrDataUrl ? (
+                        <div className="rounded-md border p-3 inline-block bg-card">
+                          <img
+                            src={botPairingQrDataUrl}
+                            alt={tTabs('connection')}
+                            className="w-64 h-64"
+                          />
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <Loader2 className="size-4 animate-spin" /> {tConnect('qrGenerating')}
+                        </div>
+                      )}
+                      <p className="text-xs text-muted-foreground">{tConnect('qrRefreshHint')}</p>
+                    </div>
+                  )}
+                  {botPairingState === 'connecting' && (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 className="size-4 animate-spin" /> {tConnect('qrGenerating')}
+                    </div>
+                  )}
+                  {botPairingState === 'connected' && (
+                    <div className="flex items-center gap-2 text-sm text-green-700">
+                      <CheckCircle2 className="size-5" /> {tState('connected')}
+                    </div>
+                  )}
+                  {botPairingState === 'unavailable' && (
+                    <p className="text-sm text-muted-foreground">{tBridge('notConnected')}</p>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {effectiveConnectionChoice === 'local' && !bridgeConfigured && !status?.enabled && (
               <Card>
                 <CardContent className="text-sm text-muted-foreground flex items-center justify-between gap-4 py-4">
                   <span>{tConnection('notEnabled')}</span>
@@ -872,7 +1302,7 @@ export default function WhatsAppPage() {
               </Card>
             )}
 
-            {status?.enabled && (
+            {status?.enabled && !bridgeConfigured && effectiveConnectionChoice === 'local' && (
               <>
                 {isAdmin && (
                   <Card>
@@ -1349,134 +1779,229 @@ export default function WhatsAppPage() {
                   <CardDescription>{tInbox('description')}</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {inbox.length === 0 ? (
+                  {inboxConversations.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-10 text-center text-sm text-muted-foreground">
                       <Inbox className="size-8 mb-2 opacity-40" />
                       <p className="font-medium text-foreground">{tInbox('empty')}</p>
                       <p className="mt-1 max-w-sm">{tInbox('emptyHint')}</p>
                     </div>
                   ) : (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>{tSent('colWhen')}</TableHead>
-                          <TableHead>{tSent('colPhone')}</TableHead>
-                          <TableHead>{tSent('colBody')}</TableHead>
-                          <TableHead>{tInbox('colTakeover')}</TableHead>
-                          <TableHead></TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {inbox.map((m) => {
-                          const isBlocked = blocklist.some((b) => b.phone_e164 === m.phone_e164);
-                          const isTaken = m.takeover_state === 'taken';
+                    <div className="grid h-[min(68vh,44rem)] min-h-[22rem] grid-rows-2 gap-3 lg:grid-cols-[minmax(15rem,0.8fr)_minmax(0,1.6fr)] lg:grid-rows-1">
+                      <div
+                        className="min-h-0 overflow-y-auto overscroll-contain rounded-md border"
+                        aria-label={tInbox('title')}
+                      >
+                        {inboxConversations.map((conversation) => {
+                          const isSelected = conversation.phone_e164 === activeConversationPhone;
                           return (
-                            <TableRow key={m.id}>
-                              <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                                {fmt(m.queued_at)}
-                              </TableCell>
-                              <TableCell className="font-mono text-xs">
-                                <button
-                                  type="button"
-                                  onClick={() => copyToClipboard(m.phone_e164, m.phone_e164)}
-                                  className="inline-flex items-center gap-1 hover:text-foreground transition-colors cursor-pointer"
-                                  title={tInbox('copyPhone')}
-                                >
-                                  <Copy className="size-3 opacity-0 group-hover:opacity-100" />
-                                  <Ltr>{m.phone_e164}</Ltr>
-                                </button>
-                              </TableCell>
-                              <TableCell className="text-sm whitespace-pre-line break-words max-w-md">
-                                {m.body}
-                                {isTaken && (
-                                  <div className="mt-2 flex items-center gap-2">
-                                    <Input
-                                      value={replyDrafts[m.id] ?? ''}
-                                      maxLength={4096}
-                                      placeholder={tInbox('replyPlaceholder')}
-                                      aria-label={tInbox('replyPlaceholder')}
-                                      disabled={sendingReplyId !== null}
-                                      onChange={(event) =>
-                                        setReplyDrafts((current) => ({
-                                          ...current,
-                                          [m.id]: event.target.value,
-                                        }))
-                                      }
-                                      onKeyDown={(event) => {
-                                        if (event.key === 'Enter') {
-                                          event.preventDefault();
-                                          void sendInboxReply(m.id);
-                                        }
-                                      }}
-                                    />
-                                    <Button
-                                      type="button"
-                                      size="sm"
-                                      aria-label={tInbox('sendReply')}
-                                      disabled={
-                                        !replyDrafts[m.id]?.trim() || sendingReplyId !== null
-                                      }
-                                      onClick={() => void sendInboxReply(m.id)}
-                                    >
-                                      {sendingReplyId === m.id ? (
-                                        <Loader2 className="size-3 animate-spin" />
-                                      ) : (
-                                        <Send className="size-3" />
-                                      )}
-                                      <span className="sr-only">{tInbox('sendReply')}</span>
-                                    </Button>
-                                  </div>
-                                )}
-                              </TableCell>
-                              <TableCell>
-                                {isTaken ? (
-                                  <Badge
-                                    variant="secondary"
-                                    className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-                                  >
-                                    {tInbox('takenBy', { by: m.takeover_taken_by ?? '—' })}
+                            <button
+                              key={conversation.phone_e164}
+                              type="button"
+                              aria-pressed={isSelected}
+                              onClick={() => {
+                                if (activeConversationPhone !== conversation.phone_e164) {
+                                  setSelectedConversationPhone(conversation.phone_e164);
+                                  setConversationHistory([]);
+                                }
+                              }}
+                              className={`w-full border-b p-3 text-left transition-colors last:border-b-0 ${isSelected ? 'bg-muted/60' : 'hover:bg-muted/30'}`}
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <span className="font-mono text-xs font-medium">
+                                  <Ltr>{conversation.phone_e164}</Ltr>
+                                </span>
+                                <span className="shrink-0 text-xs text-muted-foreground">
+                                  {fmt(conversation.last_message.queued_at)}
+                                </span>
+                              </div>
+                              <p className="mt-2 line-clamp-2 break-words text-sm text-muted-foreground">
+                                {conversation.last_message.body || '—'}
+                              </p>
+                              <div className="mt-2 flex flex-wrap gap-1.5">
+                                {conversation.takeover_state === 'taken' ? (
+                                  <Badge variant="secondary">
+                                    {tInbox('takenBy', {
+                                      by: conversation.takeover_taken_by ?? '—',
+                                    })}
                                   </Badge>
                                 ) : (
                                   <Badge variant="outline">{tInbox('free')}</Badge>
                                 )}
-                              </TableCell>
-                              <TableCell>
-                                <div className="flex items-center gap-2">
-                                  {isTaken ? (
+                                {conversation.is_blocked && (
+                                  <Badge variant="secondary">{tInbox('blocked')}</Badge>
+                                )}
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <div className="flex min-h-0 min-w-0 flex-col rounded-md border">
+                        {selectedConversation ? (
+                          <>
+                            <div className="flex flex-wrap items-center justify-between gap-3 border-b p-3">
+                              <div className="min-w-0">
+                                <h3 className="font-mono text-sm font-semibold">
+                                  <Ltr>{selectedConversation.phone_e164}</Ltr>
+                                </h3>
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                  {fmt(selectedConversation.last_message.queued_at)}
+                                </p>
+                              </div>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <Button
+                                  type="button"
+                                  size="icon"
+                                  variant="ghost"
+                                  aria-label={tInbox('copyPhone')}
+                                  title={tInbox('copyPhone')}
+                                  onClick={() =>
+                                    copyToClipboard(
+                                      selectedConversation.phone_e164,
+                                      selectedConversation.phone_e164,
+                                    )
+                                  }
+                                >
+                                  <Copy className="size-4" />
+                                </Button>
+                                {selectedConversation.takeover_state === 'taken' ? (
+                                  <>
+                                    <Badge variant="secondary">
+                                      {tInbox('takenBy', {
+                                        by: selectedConversation.takeover_taken_by ?? '—',
+                                      })}
+                                    </Badge>
                                     <Button
+                                      type="button"
                                       size="sm"
                                       variant="outline"
-                                      onClick={() => releaseConversation(m.phone_e164)}
+                                      onClick={() =>
+                                        void releaseConversation(selectedConversation.phone_e164)
+                                      }
                                     >
                                       <RotateCcw className="size-3" /> {tInbox('releaseCta')}
                                     </Button>
-                                  ) : (
-                                    <Button
-                                      size="sm"
-                                      variant="default"
-                                      onClick={() => takeConversation(m.phone_e164)}
-                                    >
-                                      <UserCheck className="size-3" /> {tInbox('takeoverCta')}
-                                    </Button>
-                                  )}
-                                  {isBlocked ? (
-                                    <Badge variant="secondary">{tInbox('blocked')}</Badge>
-                                  ) : (
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={() => blockFromInbox(m.phone_e164)}
-                                    >
-                                      <Ban className="size-3" /> {tInbox('blockCta')}
-                                    </Button>
-                                  )}
+                                  </>
+                                ) : (
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    onClick={() =>
+                                      void takeConversation(selectedConversation.phone_e164)
+                                    }
+                                  >
+                                    <UserCheck className="size-3" /> {tInbox('takeoverCta')}
+                                  </Button>
+                                )}
+                                {selectedConversation.is_blocked ? (
+                                  <Badge variant="secondary">{tInbox('blocked')}</Badge>
+                                ) : (
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() =>
+                                      void blockFromInbox(selectedConversation.phone_e164)
+                                    }
+                                  >
+                                    <Ban className="size-3" /> {tInbox('blockCta')}
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+
+                            <div
+                              ref={conversationHistoryScrollRef}
+                              className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain p-3"
+                              aria-label={tInbox('title')}
+                              onScroll={(event) => {
+                                const element = event.currentTarget;
+                                const distanceFromBottom =
+                                  element.scrollHeight - element.clientHeight - element.scrollTop;
+                                followLatestConversationMessage.current = distanceFromBottom <= 80;
+                              }}
+                            >
+                              {conversationHistoryLoading ? (
+                                <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                                  <Loader2 className="mr-2 size-4 animate-spin" />
                                 </div>
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
+                              ) : conversationHistory.length === 0 ? (
+                                <p className="py-8 text-center text-sm text-muted-foreground">
+                                  {tInbox('empty')}
+                                </p>
+                              ) : (
+                                [...conversationHistory].reverse().map((message) => (
+                                  <div
+                                    key={message.id}
+                                    className={`flex ${message.direction === 'outbound' ? 'justify-end' : 'justify-start'}`}
+                                  >
+                                    <div
+                                      className={`max-w-[85%] rounded-lg px-3 py-2 ${message.direction === 'outbound' ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}
+                                    >
+                                      <p className="whitespace-pre-wrap break-words text-sm">
+                                        {message.body}
+                                      </p>
+                                      <time
+                                        className={`mt-1 block text-right text-[11px] ${message.direction === 'outbound' ? 'opacity-75' : 'text-muted-foreground'}`}
+                                      >
+                                        {fmt(message.queued_at)}
+                                      </time>
+                                    </div>
+                                  </div>
+                                ))
+                              )}
+                            </div>
+
+                            {selectedConversation.takeover_state === 'taken' &&
+                              latestSelectedInbound && (
+                                <div className="flex items-center gap-2 border-t p-3">
+                                  <Input
+                                    value={replyDrafts[latestSelectedInbound.id] ?? ''}
+                                    maxLength={4096}
+                                    placeholder={tInbox('replyPlaceholder')}
+                                    aria-label={tInbox('replyPlaceholder')}
+                                    disabled={sendingReplyId !== null}
+                                    onChange={(event) =>
+                                      setReplyDrafts((current) => ({
+                                        ...current,
+                                        [latestSelectedInbound.id]: event.target.value,
+                                      }))
+                                    }
+                                    onKeyDown={(event) => {
+                                      if (event.key === 'Enter') {
+                                        event.preventDefault();
+                                        void sendInboxReply(latestSelectedInbound.id);
+                                      }
+                                    }}
+                                  />
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    aria-label={tInbox('sendReply')}
+                                    disabled={
+                                      !replyDrafts[latestSelectedInbound.id]?.trim() ||
+                                      sendingReplyId !== null
+                                    }
+                                    onClick={() => void sendInboxReply(latestSelectedInbound.id)}
+                                  >
+                                    {sendingReplyId === latestSelectedInbound.id ? (
+                                      <Loader2 className="size-3 animate-spin" />
+                                    ) : (
+                                      <Send className="size-3" />
+                                    )}
+                                    <span className="sr-only">{tInbox('sendReply')}</span>
+                                  </Button>
+                                </div>
+                              )}
+                          </>
+                        ) : (
+                          <div className="flex flex-1 flex-col items-center justify-center p-6 text-center text-sm text-muted-foreground">
+                            <Inbox className="mb-2 size-8 opacity-40" />
+                            <p>{tInbox('emptyHint')}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   )}
                 </CardContent>
               </Card>

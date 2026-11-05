@@ -3609,6 +3609,24 @@
       "connection": "Kết nối",
       "inbox": "Hộp thư đến",
       "sent": "Đã gửi"
+    },
+    "bridgeConfig": {
+      "title": "Cầu nối bot",
+      "description": "Cấu hình điểm cuối WSS và thông tin xác thực. Bài kiểm tra chỉ xác minh handshake hiện tại, không bật chuyển tiếp tin nhắn.",
+      "url": "Địa chỉ WSS",
+      "token": "Mã thông báo cầu nối",
+      "save": "Lưu cấu hình",
+      "clear": "Xóa cấu hình",
+      "test": "Kiểm tra kết nối",
+      "configured": "Đã cấu hình",
+      "notConfigured": "Chưa cấu hình",
+      "connected": "Đã kết nối",
+      "notConnected": "Chưa kết nối",
+      "testError": "Kiểm tra kết nối thất bại. Hãy kiểm tra cài đặt và thử lại.",
+      "saved": "Đã lưu cấu hình.",
+      "cleared": "Đã xóa cấu hình.",
+      "testSuccess": "Handshake thành công.",
+      "required": "Nhập địa chỉ WSS và mã thông báo."
     }
   }
 }

@@ -3609,6 +3609,24 @@
       "connection": "Bağlantı & Cihaz",
       "inbox": "Gelen Yanıtlar",
       "sent": "Gönderilen Mesajlar"
+    },
+    "bridgeConfig": {
+      "title": "Bot köprüsü",
+      "description": "WSS uç noktasını ve kimlik bilgisini yapılandırın. Bu test yalnızca mevcut el sıkışmasını doğrular; mesaj aktarımını etkinleştirmez.",
+      "url": "WSS adresi",
+      "token": "Köprü belirteci",
+      "save": "Yapılandırmayı kaydet",
+      "clear": "Yapılandırmayı temizle",
+      "test": "Bağlantıyı test et",
+      "configured": "Yapılandırıldı",
+      "notConfigured": "Yapılandırılmadı",
+      "connected": "Bağlandı",
+      "notConnected": "Bağlı değil",
+      "testError": "Bağlantı testi başarısız. Ayarları kontrol edip tekrar deneyin.",
+      "saved": "Yapılandırma kaydedildi.",
+      "cleared": "Yapılandırma temizlendi.",
+      "testSuccess": "El sıkışması başarılı.",
+      "required": "WSS URL ve belirteci girin."
     }
   }
 }

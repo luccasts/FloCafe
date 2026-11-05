@@ -720,6 +720,10 @@ function isBlocked(phoneE164: string): boolean {
   return !!row;
 }
 
+export function isPhoneBlocked(phoneE164: string): boolean {
+  return isBlocked(phoneE164);
+}
+
 export function isOverRateLimit(
   phoneE164: string,
   maxPerHour = RATE_LIMIT_MAX_PER_HOUR,

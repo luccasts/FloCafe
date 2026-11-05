@@ -3609,6 +3609,24 @@
       "connection": "接続",
       "inbox": "受信トレイ",
       "sent": "送信済み"
+    },
+    "bridgeConfig": {
+      "title": "ボットブリッジ",
+      "description": "WSS エンドポイントと認証情報を設定します。このテストは現在のハンドシェイクのみを確認し、メッセージ中継は有効にしません。",
+      "url": "WSS アドレス",
+      "token": "ブリッジトークン",
+      "save": "設定を保存",
+      "clear": "設定を消去",
+      "test": "接続をテスト",
+      "configured": "設定済み",
+      "notConfigured": "未設定",
+      "connected": "接続済み",
+      "notConnected": "未接続",
+      "testError": "接続テストに失敗しました。設定を確認して再試行してください。",
+      "saved": "設定を保存しました。",
+      "cleared": "設定を消去しました。",
+      "testSuccess": "ハンドシェイクに成功しました。",
+      "required": "WSS URL とトークンを入力してください。"
     }
   }
 }
