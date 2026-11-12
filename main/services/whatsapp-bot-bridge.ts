@@ -134,11 +134,31 @@ export function testBotBridgeConnection(timeoutMs = 5000): Promise<boolean> {
     probe.on('close', () => finish(false));
   });
 }
+/**
+ * Excecao minima para WS sem TLS: apenas loopback literal.
+ *
+ * O bot serve o bridge em HTTP puro (node:http), sem TLS. Em teste local,
+ * FloCafe e bot na mesma maquina, exigir wss:// obrigaria a montar um
+ * terminador TLS so para o piloto. A excecao vale SOMENTE para 127.0.0.1 e
+ * localhost, SOMENTE com opt-in explicito por variavel de ambiente, e nunca
+ * com NODE_ENV=production. Destinos remotos continuam exigindo wss://.
+ */
+const LOOPBACK_BRIDGE_HOSTS = new Set(['127.0.0.1', 'localhost']);
+const INSECURE_LOOPBACK_FLAG = 'FLOCAFE_BOT_BRIDGE_ALLOW_INSECURE_LOOPBACK';
+function insecureLoopbackAllowed(env: NodeJS.ProcessEnv = process.env): boolean {
+  if (env[INSECURE_LOOPBACK_FLAG] !== '1') return false;
+  if (env.NODE_ENV === 'production') return false;
+  return true;
+}
 export function validateBotBridgeUrl(value: unknown): value is string {
   if (typeof value !== 'string' || !value.trim()) return false;
   try {
     const url = new URL(value);
-    return url.protocol === 'wss:' && !url.username && !url.password && !url.search && !url.hash && url.pathname === '/';
+    if (url.username || url.password || url.search || url.hash || url.pathname !== '/') return false;
+    if (url.protocol === 'wss:') return true;
+    if (url.protocol !== 'ws:') return false;
+    if (!LOOPBACK_BRIDGE_HOSTS.has(url.hostname)) return false;
+    return insecureLoopbackAllowed();
   } catch { return false; }
 }
 function configPath(): string { return path.join(app.getPath('userData'), FILE); }
