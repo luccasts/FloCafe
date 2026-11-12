@@ -21,3 +21,29 @@ export function migrateWhatsAppInbox(db: Database.Database): void {
     ON whatsapp_messages(phone_e164, direction, external_message_id)
     WHERE kind IN ('user_message','bot_reply','agent_reply');`);
 }
+
+export function migrateWhatsAppInboxSystem(db: Database.Database): void {
+  const schema = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'whatsapp_messages'").get() as { sql: string };
+  const index = db.prepare("SELECT sql FROM sqlite_master WHERE name = 'idx_whatsapp_messages_inbox_external'").get() as { sql: string } | undefined;
+  if (schema.sql.includes("'system'") && index?.sql.includes("'system'")) return;
+  const sql = schema.sql.replace(/CREATE TABLE\s+"?whatsapp_messages"?/i, 'CREATE TABLE whatsapp_messages_system')
+    .replace("'agent_reply'))", "'agent_reply','system'))");
+  if (sql === schema.sql || !sql.includes("'system'")) throw new Error('Unexpected WhatsApp inbox schema');
+  const sequence = db.prepare("SELECT seq FROM sqlite_sequence WHERE name = 'whatsapp_messages'").get() as { seq: number } | undefined;
+  const indexes = db.prepare("SELECT sql FROM sqlite_master WHERE tbl_name = 'whatsapp_messages' AND type IN ('index', 'trigger') AND sql IS NOT NULL AND name != 'idx_whatsapp_messages_inbox_external'").all() as { sql: string }[];
+  db.exec(`CREATE TEMP TABLE inbox_attempts_backup AS SELECT * FROM whatsapp_message_attempts;
+    ${sql};
+    INSERT INTO whatsapp_messages_system SELECT * FROM whatsapp_messages;
+    DROP TABLE whatsapp_messages;
+    ALTER TABLE whatsapp_messages_system RENAME TO whatsapp_messages;`);
+  if (sequence) {
+    const restored = db.prepare("UPDATE sqlite_sequence SET seq = ? WHERE name = 'whatsapp_messages'").run(sequence.seq);
+    if (restored.changes === 0) db.prepare("INSERT INTO sqlite_sequence (name, seq) VALUES ('whatsapp_messages', ?)").run(sequence.seq);
+  }
+  for (const entry of indexes) db.exec(entry.sql);
+  db.exec(`INSERT OR IGNORE INTO whatsapp_message_attempts SELECT * FROM inbox_attempts_backup;
+    DROP TABLE inbox_attempts_backup;
+    CREATE UNIQUE INDEX idx_whatsapp_messages_inbox_external
+      ON whatsapp_messages(phone_e164, direction, external_message_id)
+      WHERE kind IN ('user_message','bot_reply','agent_reply','system');`);
+}

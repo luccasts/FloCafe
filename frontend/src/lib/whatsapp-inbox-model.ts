@@ -24,6 +24,7 @@ export interface InboxInboundMessage {
   id: number;
   phone_e164: string;
   body: string;
+  kind: string;
   status: string;
   queued_at: string;
   takeover_state?: 'free' | 'taken';
@@ -35,6 +36,7 @@ export interface InboxOutboundMessage {
   phone_e164: string;
   body: string;
   direction: 'inbound' | 'outbound';
+  kind?: string;
   queued_at: string;
 }
 
@@ -43,6 +45,7 @@ export interface InboxConversationMessage {
   phone_e164: string;
   body: string;
   direction: 'inbound' | 'outbound';
+  kind?: string;
   queued_at: string;
 }
 
@@ -98,6 +101,7 @@ export function groupInboxConversations(
       phone_e164: outbound.phone_e164,
       body: outbound.body,
       direction: 'outbound',
+      kind: outbound.kind,
       queued_at: outbound.queued_at,
     };
     if (compareMessages(message, current.last_message) > 0) current.last_message = message;
@@ -110,4 +114,38 @@ export function groupInboxConversations(
       is_blocked: blockedPhones.has(conversation.phone_e164),
     }))
     .sort((a, b) => compareMessages(b.last_message, a.last_message));
+}
+
+export interface InboxAlertState {
+  lastSeenId: number;
+  pending: Record<string, number>;
+}
+
+const HUMAN_REQUEST_BODY = '🔔 Cliente pediu atendimento humano';
+
+export function consumeInboxAlerts(
+  previous: InboxAlertState | null,
+  messages: InboxInboundMessage[],
+): { state: InboxAlertState; newRequests: string[] } {
+  const latest = new Map<string, InboxInboundMessage>();
+  let lastSeenId = previous?.lastSeenId ?? 0;
+  for (const message of messages) {
+    if (message.id > lastSeenId) lastSeenId = message.id;
+    const current = latest.get(message.phone_e164);
+    if (!current || message.id > current.id) latest.set(message.phone_e164, message);
+  }
+  const pending = { ...(previous?.pending ?? {}) };
+  for (const [phone, message] of latest) {
+    if (message.takeover_state === 'taken') delete pending[phone];
+  }
+  const newRequests: string[] = [];
+  if (previous) {
+    for (const message of [...messages].sort((a, b) => a.id - b.id)) {
+      if (message.id <= previous.lastSeenId || message.kind !== 'system' || message.body.trim() !== HUMAN_REQUEST_BODY) continue;
+      if (latest.get(message.phone_e164)?.takeover_state === 'taken') continue;
+      if (!newRequests.includes(message.phone_e164)) newRequests.push(message.phone_e164);
+      pending[message.phone_e164] = message.id;
+    }
+  }
+  return { state: { lastSeenId, pending }, newRequests };
 }

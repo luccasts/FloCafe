@@ -4,8 +4,10 @@ import { useEffect, useState, useCallback, useRef, useMemo, useLayoutEffect } fr
 import api from '@/lib/api';
 import {
   buildInboxHistoryRequest,
+  consumeInboxAlerts,
   groupInboxConversations,
   sameRows,
+  type InboxAlertState,
 } from '@/lib/whatsapp-inbox-model';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -143,6 +145,7 @@ interface InboxMessage {
   id: number;
   phone_e164: string;
   body: string;
+  kind: string;
   status: string;
   queued_at: string;
   takeover_state?: 'free' | 'taken';
@@ -154,7 +157,7 @@ interface InboxHistoryMessage {
   phone_e164: string;
   body: string;
   direction: 'inbound' | 'outbound';
-  kind?: string;
+  kind: string;
   queued_at: string;
 }
 
@@ -330,6 +333,9 @@ export default function WhatsAppPage() {
   const [sentMessages, setSentMessages] = useState<SentMessage[]>([]);
   const [retryingIds, setRetryingIds] = useState<Set<number>>(() => new Set());
   const [inbox, setInbox] = useState<InboxMessage[]>([]);
+  const inboxAlertState = useRef<InboxAlertState | null>(null);
+  const inboxRequestId = useRef(0);
+  const [pendingHumanRequests, setPendingHumanRequests] = useState<Record<string, number>>({});
   const [selectedConversationPhone, setSelectedConversationPhone] = useState<string | null>(null);
   const [conversationHistory, setConversationHistory] = useState<InboxHistoryMessage[]>([]);
   const [conversationHistoryLoading, setConversationHistoryLoading] = useState(false);
@@ -438,10 +444,10 @@ export default function WhatsAppPage() {
     });
     return () => cancelAnimationFrame(frame);
   }, [activeConversationPhone, conversationHistory, conversationHistoryLoading, effectiveTab]);
-  const onTabChange = (v: string) => {
+  const onTabChange = useCallback((v: string) => {
     setUserTab(v);
     if (typeof window !== 'undefined') window.localStorage.setItem('whatsapp.activeTab', v);
-  };
+  }, []);
 
   const refreshQr = useCallback(async () => {
     if (!isAdmin || bridgeConfigured || effectiveConnectionChoice !== 'local') return;
@@ -477,14 +483,32 @@ export default function WhatsAppPage() {
 
   const refreshInbox = useCallback(async () => {
     if (!isAdmin) return;
+    const requestId = ++inboxRequestId.current;
     try {
       const { data } = await api.get('/whatsapp/inbox', { params: { limit: 100 } });
-      const nextMessages = data.messages ?? [];
+      if (requestId !== inboxRequestId.current) return;
+      const nextMessages: InboxMessage[] = data.messages ?? [];
+      const alerts = consumeInboxAlerts(inboxAlertState.current, nextMessages);
+      inboxAlertState.current = alerts.state;
+      setPendingHumanRequests(alerts.state.pending);
+      for (const phone of alerts.newRequests) {
+        toast((item) => (
+          <div className="flex items-center gap-3 rounded-md bg-background p-3 text-sm text-foreground shadow-lg ring-1 ring-border">
+            <span>🔔 Cliente pediu atendimento humano: <Ltr>{phone}</Ltr></span>
+            <Button type="button" size="sm" onClick={() => {
+              setSelectedConversationPhone(phone);
+              setConversationHistory([]);
+              onTabChange('inbox');
+              toast.dismiss(item.id);
+            }}>Abrir conversa</Button>
+          </div>
+        ), { duration: 10000 });
+      }
       setInbox((current) => (sameRows(current, nextMessages) ? current : nextMessages));
     } catch {
       /* ignore */
     }
-  }, [isAdmin]);
+  }, [isAdmin, onTabChange]);
 
   const refreshConversationHistory = useCallback(async (phone: string) => {
     const requestId = ++conversationHistoryRequest.current;
@@ -513,7 +537,7 @@ export default function WhatsAppPage() {
     if (!activeConversationPhone || !isAdmin) return;
     // oxlint-disable-next-line react-hooks/set-state-in-effect
     void refreshConversationHistory(activeConversationPhone);
-  }, [activeConversationPhone, isAdmin, refreshConversationHistory]);
+  }, [activeConversationPhone, effectiveTab, isAdmin, refreshConversationHistory]);
 
   const refreshBlocklist = useCallback(async () => {
     if (!isAdmin) return;
@@ -952,6 +976,12 @@ export default function WhatsAppPage() {
   const takeConversation = async (phone: string) => {
     try {
       await api.post(`/whatsapp/takeover/${encodeURIComponent(phone)}`);
+      if (inboxAlertState.current) {
+        const pending = { ...inboxAlertState.current.pending };
+        delete pending[phone];
+        inboxAlertState.current = { ...inboxAlertState.current, pending };
+        setPendingHumanRequests(pending);
+      }
       toast.success(tInbox('takeoverSuccess'));
       await refreshInbox();
     } catch (err) {
@@ -1829,6 +1859,9 @@ export default function WhatsAppPage() {
                                 )}
                                 {conversation.is_blocked && (
                                   <Badge variant="secondary">{tInbox('blocked')}</Badge>
+                                )}
+                                {pendingHumanRequests[conversation.phone_e164] && conversation.takeover_state === 'free' && (
+                                  <Badge variant="destructive" aria-label="Cliente pediu atendimento humano">🔔</Badge>
                                 )}
                               </div>
                             </button>

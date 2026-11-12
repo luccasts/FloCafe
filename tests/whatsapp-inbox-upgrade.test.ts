@@ -11,6 +11,7 @@ Module._load = function (name: string) {
 };
 process.env.NODE_ENV = 'test';
 const database = require('../main/db');
+const systemMigration = database.MIGRATIONS.pop();
 const migration = database.MIGRATIONS.pop();
 assert.equal(migration.version, 126);
 try {
@@ -53,6 +54,7 @@ try {
   console.log('Upgrade v125 -> v126: 5 legacy kinds and attempts preserved; indexes, FKs, cascade and unique constraint passed');
 } finally {
   if (!database.MIGRATIONS.includes(migration)) database.MIGRATIONS.push(migration);
+  database.MIGRATIONS.push(systemMigration);
   database.closeDatabase();
   fs.rmSync(testDir, {recursive:true,force:true});
 }

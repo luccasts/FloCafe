@@ -242,7 +242,7 @@
     "test:status-messages": "ts-node --transpile-only -P tests/tsconfig.json tests/status-messages.test.ts",
     "test:whatsapp-service-auth": "node tests/run-electron-node-test.cjs tests/whatsapp-service-auth.test.ts && npm run test:whatsapp-inbox-ingestion && npm run test:whatsapp-takeover",
     "test:whatsapp-takeover": "node tests/run-electron-node-test.cjs tests/whatsapp-takeover.test.ts && node tests/run-electron-node-test.cjs tests/whatsapp-bot-reply.test.ts",
-    "test:whatsapp-inbox-ingestion": "node tests/run-electron-node-test.cjs tests/whatsapp-inbox-ingestion.test.ts && node tests/run-electron-node-test.cjs tests/whatsapp-inbox-upgrade.test.ts",
+    "test:whatsapp-inbox-ingestion": "node tests/run-electron-node-test.cjs tests/whatsapp-inbox-ingestion.test.ts && node tests/run-electron-node-test.cjs tests/whatsapp-inbox-upgrade.test.ts && node tests/run-electron-node-test.cjs tests/whatsapp-inbox-system-upgrade.test.ts && ts-node --transpile-only -P tests/tsconfig.json tests/whatsapp-inbox-alerts.test.ts",
     "test:local-backup": "node tests/run-electron-node-test.cjs tests/local-backup.test.ts",
     "test:database-tools-api": "node tests/run-electron-node-test.cjs tests/database-tools-api.test.ts && node tests/run-electron-node-test.cjs tests/db-initialize-drive-boundary.test.ts && node tests/run-electron-node-test.cjs tests/database-maintenance-lock.test.ts && node tests/run-electron-node-test.cjs tests/database-maintenance-allowlist.test.ts",
     "test:issue-127-password-recovery": "node tests/run-electron-node-test.cjs tests/issue-127-password-recovery.test.ts",

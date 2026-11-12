@@ -220,7 +220,8 @@ export type MessageKind =
   | 'daily_sales_report'
   | 'user_message'
   | 'bot_reply'
-  | 'agent_reply';
+  | 'agent_reply'
+  | 'system';
 
 export function isReportMessageKind(kind: unknown): kind is ReportMessageKind {
   return kind === 'z_report' || kind === 'daily_sales_report';
@@ -2714,6 +2715,7 @@ export interface InboxMessage {
   id: number;
   phone_e164: string;
   body: string;
+  kind: MessageKind;
   status: string;
   queued_at: string;
   takeover_state: 'free' | 'taken';
@@ -2723,7 +2725,7 @@ export interface InboxMessage {
 export function listInbox(limit: number, offset: number): InboxMessage[] {
   return getDatabase()
     .prepare(`
-    SELECT m.id, m.phone_e164, m.body, m.status, m.queued_at,
+    SELECT m.id, m.phone_e164, m.body, m.kind, m.status, m.queued_at,
       COALESCE(t.state, 'free') AS takeover_state,
       t.taken_by AS takeover_taken_by
     FROM whatsapp_messages m

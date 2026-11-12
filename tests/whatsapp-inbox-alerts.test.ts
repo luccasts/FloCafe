@@ -1,0 +1,38 @@
+import assert from 'node:assert/strict';
+import { consumeInboxAlerts, type InboxAlertState, type InboxInboundMessage } from '../frontend/src/lib/whatsapp-inbox-model';
+
+const phone = '+14155552671';
+const other = '+14155552672';
+const request = (id: number, number = phone, takeover: 'free' | 'taken' = 'free', body = '🔔 Cliente pediu atendimento humano', kind = 'system'): InboxInboundMessage => ({ id, phone_e164: number, kind, body, status: 'queued', queued_at: '2026-01-02 03:04:05', takeover_state: takeover });
+let state: InboxAlertState | null = null;
+const tick = (messages: InboxInboundMessage[]) => {
+  const result = consumeInboxAlerts(state, messages);
+  state = result.state;
+  return result;
+};
+assert.deepEqual(tick([request(3), request(2, other)]).newRequests, []);
+assert.deepEqual(state?.pending, {});
+assert.deepEqual(tick([request(4, phone, 'free', 'other system event'), request(3)]).newRequests, []);
+assert.deepEqual(tick([request(5, phone, 'free', '🔔 Cliente pediu atendimento humano', 'user_message'), request(3)]).newRequests, []);
+let result = tick([request(6), request(5), request(3)]);
+assert.deepEqual(result.newRequests, [phone]);
+assert.equal(result.state.pending[phone], 6);
+assert.deepEqual(tick([request(6), request(5), request(3)]).newRequests, []);
+result = tick([request(7, other), request(6)]);
+assert.deepEqual(result.newRequests, [other]);
+assert.equal(result.state.pending[phone], 6);
+assert.equal(result.state.pending[other], 7);
+result = tick([request(7, other), request(6, phone, 'taken')]);
+assert.deepEqual(result.newRequests, []);
+assert.equal(result.state.pending[phone], undefined);
+assert.deepEqual(tick([request(7, other), request(6, phone, 'free')]).newRequests, []);
+assert.equal(state?.pending[phone], undefined);
+result = tick([request(8), request(7, other)]);
+assert.deepEqual(result.newRequests, [phone]);
+assert.equal(result.state.pending[phone], 8);
+result = tick([request(9), request(8), request(7, other)]);
+assert.deepEqual(result.newRequests, [phone]);
+assert.equal(result.state.pending[phone], 9);
+assert.deepEqual(tick([request(6), request(7, other)]).newRequests, []);
+assert.equal(state?.pending[phone], 9);
+console.log('Inbox alerts: initial baseline, exact system signal, dedupe, takeover/release, new request, stale poll passed');

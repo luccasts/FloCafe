@@ -60,6 +60,16 @@ async function run() {
       assert.equal(stored.sent_at, '2026-01-02 03:04:05');
       assert.equal((await post(event)).body.id, result.body.id);
     }
+    const system = { ...payload, kind: 'system', body: '🔔 Cliente pediu atendimento humano', external_message_id: 'human-request-1' };
+    const systemResult = await post(system);
+    assert.equal(systemResult.status, 200);
+    assert.equal(db.prepare('SELECT kind FROM whatsapp_messages WHERE id = ?').get(systemResult.body.id).kind, 'system');
+    assert.equal((await post(system)).body.id, systemResult.body.id);
+    assert.equal((await post({ ...system, body: 'changed request' })).status, 409);
+    assert.equal((await post({ ...system, direction: 'outbound', external_message_id: 'invalid-system-direction' })).status, 400);
+    const whatsapp = require('../main/services/whatsapp');
+    assert.equal(whatsapp.listInbox(100, 0).find((message: any) => message.id === systemResult.body.id)?.kind, 'system');
+    assert.equal(whatsapp.listMessages({ phone: payload.phone_e164, limit: 100 }).find((message: any) => message.id === systemResult.body.id)?.kind, 'system');
     for (const patch of [
       {timestamp:'2026-02-30T03:04:05.000Z'}, {timestamp:'2026-01-02T03:04:05'},
       {timestamp:123}, {direction:'outbound'}, {phone_e164:'14155552671'},
@@ -71,7 +81,7 @@ async function run() {
     }
     const concurrent = await Promise.all(Array.from({length:5}, () => post(payload)));
     for (const result of concurrent) { assert.equal(result.status,200); assert.equal(result.body.id,first.body.id); }
-    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM whatsapp_messages').get().n, 3);
+    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM whatsapp_messages').get().n, 4);
     const sourceRoot = process.env.POLO_BOT_ROOT;
     if (sourceRoot) {
       const ts = require('typescript');
@@ -87,8 +97,8 @@ async function run() {
       const { resolveInboxPhone } = await loadSource('whatsappIdentity');
       const baseUrl = `http://127.0.0.1:${(server.address() as any).port}`;
       const client = new FloCafeInboxClient({ baseUrl, apiKey: 'a'.repeat(64), requestTimeoutMs: 5000 });
-      for (const kind of ['user_message', 'bot_reply', 'agent_reply']) {
-        const event = { phoneE164: resolveInboxPhone('987654321@lid', '14155552671@s.whatsapp.net'), direction: kind === 'user_message' ? 'inbound' : 'outbound', kind, body: `client ${kind}`, externalMessageId: `client-${kind}`, status: kind === 'user_message' ? 'queued' : 'sent', timestamp: payload.timestamp };
+      for (const kind of ['user_message', 'bot_reply', 'agent_reply', 'system']) {
+        const event = { phoneE164: resolveInboxPhone('987654321@lid', '14155552671@s.whatsapp.net'), direction: kind === 'user_message' || kind === 'system' ? 'inbound' : 'outbound', kind, body: kind === 'system' ? '🔔 Cliente pediu atendimento humano' : `client ${kind}`, externalMessageId: `client-${kind}`, status: kind === 'user_message' || kind === 'system' ? 'queued' : 'sent', timestamp: payload.timestamp };
         const result = await client.sendWithRetry(event, 0);
         assert.equal((await client.sendWithRetry(event, 1)).id, result.id);
         const stored = db.prepare('SELECT * FROM whatsapp_messages WHERE id = ?').get(result.id);
@@ -110,8 +120,8 @@ async function run() {
         const invalid = new FloCafeInboxClient({baseUrl, apiKey, requestTimeoutMs:5000});
         await assert.rejects(invalid.sendMessage({phoneE164:payload.phone_e164,direction:'inbound',kind:'user_message',body:'invalid auth',externalMessageId:'bad-auth',status:'queued',timestamp:payload.timestamp}), /HTTP 401/);
       }
-      assert.equal(db.prepare('SELECT COUNT(*) AS n FROM whatsapp_messages').get().n, 7);
-      console.log('Cross-repo production client: 3 event kinds read back, retries deduplicated, conflicts 409, missing/wrong key 401');
+      assert.equal(db.prepare('SELECT COUNT(*) AS n FROM whatsapp_messages').get().n, 9);
+      console.log('Cross-repo production client: 4 event kinds read back, retries deduplicated, conflicts 409, missing/wrong key 401');
     }
     console.log('Ingestion contract: all assertions passed');
   } finally {

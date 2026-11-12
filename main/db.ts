@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3';
-import { migrateWhatsAppInbox } from './whatsapp-inbox-migration';
+import { migrateWhatsAppInbox, migrateWhatsAppInboxSystem } from './whatsapp-inbox-migration';
 import type { Request, Response, NextFunction } from 'express';
 import * as path from 'path';
 import * as os from 'os';
@@ -10482,6 +10482,11 @@ export const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
     version: 126,
     name: 'whatsapp_external_inbox_contract',
     up: () => migrateWhatsAppInbox(db),
+  },
+  {
+    version: 127,
+    name: 'whatsapp_inbox_system_kind',
+    up: () => migrateWhatsAppInboxSystem(db),
   },
 ];
 
