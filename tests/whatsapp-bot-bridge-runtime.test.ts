@@ -14,7 +14,7 @@ class FakeSocket extends EventEmitter {
 }
 const dir = require('node:fs').mkdtempSync(require('node:path').join(require('node:os').tmpdir(), 'bridge-runtime-'));
 Module._load = function(request: string) {
-  if (request === 'electron') return { app: { getPath: () => dir }, safeStorage: { isEncryptionAvailable: () => true, encryptString: (s: string) => Buffer.from(s), decryptString: (b: Buffer) => b.toString() } };
+  if (request === 'electron') return { app: { isReady: () => true, getPath: () => dir }, safeStorage: { isEncryptionAvailable: () => true, encryptString: (s: string) => Buffer.from(s), decryptString: (b: Buffer) => b.toString() } };
   if (request === 'ws') return FakeSocket;
   return originalLoad.apply(this, arguments as any);
 };

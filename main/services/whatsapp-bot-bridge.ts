@@ -14,6 +14,7 @@ let connected = false;
 let pairingStatus: BotPairingStatus = { state: 'unavailable', qr: null, expiresAt: null };
 let pairingQrTimer: ReturnType<typeof setTimeout> | null = null;
 let stopped = true;
+let waitingForReady = false;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let retryDelay = 1000;
 let serial = 0;
@@ -21,7 +22,10 @@ const pending = new Map<string, { resolve: (value: unknown) => void; reject: (er
 const MAX_PENDING = 100;
 const REQUEST_TIMEOUT_MS = 10000;
 export function configureBotBridgeOperations(value: BridgeOperations): void { operations = value; }
-export function getBotBridgeStatus(): { connected: boolean; configured: boolean } { return { connected, configured: Boolean(read()?.token) }; }
+export function getBotBridgeStatus(): { connected: boolean; configured: boolean } {
+  const configured = Boolean(read()?.token);
+  return { connected: connected && configured, configured };
+}
 function clearPairingQr(): void {
   if (pairingQrTimer) clearTimeout(pairingQrTimer);
   pairingQrTimer = null;
@@ -67,6 +71,7 @@ function connect(): void {
   let ready = false;
   const handshakeTimer = setTimeout(() => { if (!ready) client.terminate(); }, 5000);
   client.on('message', (frame: WebSocket.RawData) => {
+    if (socket !== client) return;
     let message: any;
     try { message = JSON.parse(frame.toString()); } catch { return; }
     if (!ready) { if (message.type === 'ready' && message.protocol === 1) { ready = true; clearTimeout(handshakeTimer); connected = true; retryDelay = 1000; } else client.close(); return; }
@@ -93,9 +98,22 @@ function connect(): void {
     }
   });
   client.on('error', () => {});
-  client.on('close', () => { clearTimeout(handshakeTimer); if (socket === client) socket = null; connected = false; clearPairingQr(); pairingStatus = { state: 'unavailable', qr: null, expiresAt: null }; failPending(new Error('bridge_disconnected')); scheduleReconnect(); });
+  client.on('close', () => { clearTimeout(handshakeTimer); if (socket !== client) return; socket = null; connected = false; clearPairingQr(); pairingStatus = { state: 'unavailable', qr: null, expiresAt: null }; failPending(new Error('bridge_disconnected')); scheduleReconnect(); });
 }
-export function startBotBridge(): void { stopped = false; if (!socket && !reconnectTimer) connect(); }
+export function startBotBridge(): void {
+  stopped = false;
+  if (!app.isReady()) {
+    if (!waitingForReady) {
+      waitingForReady = true;
+      void app.whenReady().then(() => {
+        waitingForReady = false;
+        if (!stopped) startBotBridge();
+      });
+    }
+    return;
+  }
+  if (!socket && !reconnectTimer) connect();
+}
 export function reconfigureBotBridge(): void { stopBotBridge(); startBotBridge(); }
 export function stopBotBridge(): void { stopped = true; connected = false; if (reconnectTimer) clearTimeout(reconnectTimer); reconnectTimer = null; failPending(new Error('bridge_disconnected')); clearPairingQr(); pairingStatus = { state: 'unavailable', qr: null, expiresAt: null }; const current = socket; socket = null; if (current) current.close(); }
 export function sendHumanReplyViaBotBridge(phone_e164: string, body: string): Promise<unknown> {
@@ -162,12 +180,35 @@ export function validateBotBridgeUrl(value: unknown): value is string {
   } catch { return false; }
 }
 function configPath(): string { return path.join(app.getPath('userData'), FILE); }
+let configReadErrorLogged = false;
+function reportConfigReadError(): void {
+  if (configReadErrorLogged) return;
+  configReadErrorLogged = true;
+  console.error('whatsapp_bot_bridge_config_unreadable');
+}
 function read(): Config | null {
+  let encrypted: Buffer;
   try {
-    if (!safeStorage.isEncryptionAvailable()) return null;
-    const data = JSON.parse(safeStorage.decryptString(fs.readFileSync(configPath()))) as Config;
-    return validateBotBridgeUrl(data.url) && typeof data.token === 'string' && data.token.length > 0 ? data : null;
-  } catch { return null; }
+    encrypted = fs.readFileSync(configPath());
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') reportConfigReadError();
+    return null;
+  }
+  try {
+    if (!safeStorage.isEncryptionAvailable()) {
+      if (app.isReady()) reportConfigReadError();
+      return null;
+    }
+    const data: unknown = JSON.parse(safeStorage.decryptString(encrypted));
+    if (!data || typeof data !== 'object') { reportConfigReadError(); return null; }
+    const config = data as Partial<Config>;
+    if (!validateBotBridgeUrl(config.url) || typeof config.token !== 'string' || !config.token.length) {
+      reportConfigReadError();
+      return null;
+    }
+    configReadErrorLogged = false;
+    return config as Config;
+  } catch { reportConfigReadError(); return null; }
 }
 export function getBotBridgeConfig(): { url: string | null; configured: boolean } {
   const config = read();

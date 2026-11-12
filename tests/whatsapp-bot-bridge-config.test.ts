@@ -14,7 +14,7 @@ class FakeSocket extends EventEmitter {
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'flo-bridge-test-'));
 Module._load = function (request: string) {
   if (request === 'ws') return FakeSocket;
-  if (request === 'electron') return { app: { getPath: () => dir }, safeStorage: {
+  if (request === 'electron') return { app: { isReady: () => true, getPath: () => dir }, safeStorage: {
     isEncryptionAvailable: () => true,
     encryptString: (value: string) => Buffer.from(`sealed:${Buffer.from(value).toString('base64')}`),
     decryptString: (value: Buffer) => Buffer.from(value.toString().slice(7), 'base64').toString(),
