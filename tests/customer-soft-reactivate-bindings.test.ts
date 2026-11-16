@@ -47,7 +47,7 @@ async function main() {
   assertEqual(before.country_code, '+91', 'precondition: legacy country_code is +91');
 
   const app = createApp({ '/api/customers': customerRoutes });
-  const { baseUrl } = await startServer(app);
+  const { baseUrl, server } = await startServer(app);
 
   try {
     // Re-POST with same legacy national phone + new address. This must
@@ -122,18 +122,17 @@ async function main() {
     assertEqual(invalidList.data.data.length, 1, 'invalid-phone filter returns only active malformed rows');
     assertEqual(invalidList.data.data[0].id, 'cust-invalid-active', 'invalid-phone filter excludes inactive malformed rows');
 
-    console.log('\n[DB] Database closed');
+    const { passed, failed, total } = getResults();
+    console.log(`\n${passed}/${total} passed, ${failed} failed`);
+    process.exitCode = failed === 0 ? 0 : 1;
+  } catch (err: any) {
+    console.error('Regression failed:', err.message);
+    process.exitCode = 1;
+  } finally {
+    await new Promise<void>((resolve, reject) => server.close((error: Error | undefined) => error ? reject(error) : resolve()));
     closeDatabase();
     Module._load = originalLoad;
     try { fs.rmSync(testDir, { recursive: true, force: true }); } catch { /* ignore */ }
-    const { passed, failed, total } = getResults();
-    console.log(`\n${passed}/${total} passed, ${failed} failed`);
-    process.exit(failed === 0 ? 0 : 1);
-  } catch (err: any) {
-    console.error('Regression failed:', err.message);
-    closeDatabase();
-    Module._load = originalLoad;
-    process.exit(1);
   }
 }
 

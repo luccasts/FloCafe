@@ -1151,8 +1151,8 @@ async function run() {
     initDatabase();
     assert.equal(
       getCurrentSchemaVersion(),
-      124,
-      'interrupted v114 replacement recovered and migrated to v124',
+      127,
+      'interrupted v114 replacement recovered and migrated to v127',
     );
     assert.equal(
       fs.existsSync(journalPath),

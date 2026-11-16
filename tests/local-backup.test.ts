@@ -35,7 +35,7 @@ Module._load = function (request: string, parent: unknown, isMain: boolean) {
           }
           return userDataDir;
         },
-        getVersion: () => 'test',
+        getVersion: () => 'test', isReady: () => false, whenReady: () => new Promise<void>(() => {}),
       },
       safeStorage: {
         isEncryptionAvailable: () => true,

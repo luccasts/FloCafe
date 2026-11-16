@@ -42,7 +42,7 @@ const mockApp = {
     return testDir;
   },
   getName: () => 'FloCafe',
-  getVersion: () => '0.0.0-test',
+  getVersion: () => '0.0.0-test', isReady: () => false, whenReady: () => new Promise<void>(() => {}),
 };
 const mainFrame = { frameToken: 'frame-main', detached: false };
 const mockBrowserWindow = class {

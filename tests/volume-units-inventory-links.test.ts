@@ -13,7 +13,7 @@ const jwt = require('jsonwebtoken');
 
 let activeTestDir = fs.mkdtempSync(path.join(os.tmpdir(), 'flo-volume-units-'));
 Module._load = function (request: string, parent: unknown, isMain: boolean) {
-  if (request === 'electron') return { app: { isPackaged: true, getPath: () => activeTestDir, getVersion: () => 'test' } };
+  if (request === 'electron') return { app: { isPackaged: true, getPath: () => activeTestDir, getVersion: () => 'test', isReady: () => false, whenReady: () => new Promise<void>(() => {}) } };
   return originalLoad.apply(this, arguments as any);
 };
 

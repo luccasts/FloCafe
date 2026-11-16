@@ -13,6 +13,8 @@ Module._load = function (request: string, parent: unknown, isMain: boolean) {
         isPackaged: true,
         getPath: () => testDir,
         getVersion: () => 'test',
+        isReady: () => false,
+        whenReady: () => new Promise<void>(() => {}),
       },
     };
   }

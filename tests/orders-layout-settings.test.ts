@@ -36,7 +36,7 @@ const mockApp = {
   isPackaged: true,
   getPath: (name: string) => testDir,
   getName: () => 'FloCafe',
-  getVersion: () => '0.0.0-test',
+  getVersion: () => '0.0.0-test', isReady: () => false, whenReady: () => new Promise<void>(() => {}),
 };
 const mainFrame = { frameToken: 'frame-main', detached: false };
 const mockBrowserWindow = class {

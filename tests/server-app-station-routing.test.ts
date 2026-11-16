@@ -47,7 +47,7 @@ class RasterSurfaceStub {
 Module._load = function (request: string, parent: unknown, isMain: boolean) {
   if (request === 'electron') {
     return {
-      app: { isPackaged: true, getPath: () => testDir, getVersion: () => 'test' },
+      app: { isPackaged: true, getPath: () => testDir, getVersion: () => 'test', isReady: () => true, whenReady: () => Promise.resolve() },
       ipcMain: { on: () => {}, removeListener: () => {}, handle: () => {} },
       BrowserWindow: RasterSurfaceStub,
     };

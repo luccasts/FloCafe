@@ -1,0 +1,52 @@
+import {strict as assert} from 'node:assert';
+import {EventEmitter} from 'node:events';
+import * as fs from 'node:fs';import * as path from 'node:path';
+const dir=fs.mkdtempSync(path.join(process.env.TMPDIR || process.cwd(),'catalog-bridge-wire-'));
+const machine={installationId:'store_1',key:'a'.repeat(64)};
+const Module=require('module');const original=Module._load;
+const sockets:FakeSocket[]=[];
+class FakeSocket extends EventEmitter {static OPEN=1;readyState=1;bufferedAmount=0;sent:any[]=[];constructor(){super();sockets.push(this);} send(raw:string){this.sent.push(JSON.parse(raw));} close(){this.readyState=3;this.emit('close');} terminate(){this.close();} frame(value:unknown){this.emit('message',Buffer.from(JSON.stringify(value)),false);}}
+Module._load=function(request:string){if(request==='ws')return FakeSocket;if(request==='electron')return {app:{isReady:()=>true,getPath:()=>dir},safeStorage:{isEncryptionAvailable:()=>true,encryptString:(s:string)=>Buffer.from(`sealed:${Buffer.from(s).toString('base64')}`),decryptString:(b:Buffer)=>Buffer.from(b.toString().slice(7),'base64').toString()}};return original.apply(this,arguments as any);};
+const bridge=require('../main/services/whatsapp-bot-bridge');
+const {signCatalogHandshake}=require('../main/contracts/catalogBridgeProtocol');
+let catalogCalls=0;
+async function run(){
+bridge.configureBotBridgeOperations({ingest:()=>null,takeover:()=>null,catalog:(request:any,context:any)=>{catalogCalls++;return {type:'response',protocol:2,requestId:request.requestId,sessionId:request.sessionId,operation:'catalog.get_page',outcome:'applied',result:{state:'page',snapshotId:'snap',revision:'rev',nextCursor:null,products:[],groups:[]}};}});
+assert.throws(()=>bridge.saveBotBridgeConfig('wss://synthetic.example','a'.repeat(64),machine),/invalid_catalog_key/);
+const oldPayload=process.env.FLOCAFE_BRIDGE_MAX_PAYLOAD_BYTES;
+process.env.FLOCAFE_BRIDGE_MAX_PAYLOAD_BYTES='256';
+assert.throws(()=>bridge.saveBotBridgeConfig('wss://synthetic.example','inbox-token',machine),/catalog_payload_limit_insufficient/);
+assert.doesNotThrow(()=>bridge.saveBotBridgeConfig('wss://synthetic.example','inbox-token',null));
+bridge.stopBotBridge();
+if(oldPayload===undefined) delete process.env.FLOCAFE_BRIDGE_MAX_PAYLOAD_BYTES; else process.env.FLOCAFE_BRIDGE_MAX_PAYLOAD_BYTES=oldPayload;
+bridge.saveBotBridgeConfig('wss://synthetic.example','inbox-token',machine);
+assert.equal(JSON.stringify(bridge.getBotBridgeConfig()).includes(machine.key),false);
+assert.equal(JSON.stringify(bridge.getBotBridgeStatus()).includes(machine.key),false);
+assert.equal(fs.readFileSync(path.join(dir,'whatsapp-bot-bridge.enc'),'utf8').includes(machine.key),false);
+const s=sockets.at(-1)!;s.frame({type:'ready',protocol:1});
+const badOffer=signCatalogHandshake('offer',{...machine,key:'b'.repeat(64)},'bad','c'.repeat(64),['catalog.get_page']);
+
+const offer=signCatalogHandshake('offer',machine,'s1','b'.repeat(64),['catalog.get_page']);s.frame(offer);
+const accept=s.sent.at(-1);assert.equal(accept.phase,'accept');assert.match(accept.peerNonce,/^[a-f0-9]{64}$/);
+const request={type:'request',protocol:2,requestId:'req1',sessionId:'s1',operation:'catalog.get_page',payload:{snapshotId:null,cursor:null,limit:25}};
+s.frame(request);await new Promise(resolve=>setImmediate(resolve));assert.equal(s.sent.some(m=>m.requestId==='req1'),false);
+s.frame(signCatalogHandshake('confirm',machine,'s1','b'.repeat(64),['catalog.get_page'],accept.peerNonce));
+assert.equal(bridge.getBotBridgeBusinessStatus().businessReady,true);
+s.frame(request);await new Promise(resolve=>setImmediate(resolve));assert.equal(s.sent.find(m=>m.requestId==='req1')?.outcome,'applied');
+s.frame({...request,requestId:'bad_session',sessionId:'other'});
+s.frame({...request,requestId:'order_attempt',operation:'orders.create',payload:{}});
+await new Promise(resolve=>setImmediate(resolve));assert.equal(catalogCalls,1);
+s.frame(signCatalogHandshake('confirm',machine,'s1','b'.repeat(64),['catalog.get_page'],'c'.repeat(64)));
+assert.equal(bridge.getBotBridgeBusinessStatus().businessReady,false);
+s.frame(offer);assert.equal(bridge.getBotBridgeBusinessStatus().businessReady,false);
+bridge.saveBotBridgeConfig('wss://synthetic.example','inbox-token');
+assert.equal(bridge.getBotBridgeBusinessStatus().businessConfigured,true);
+const wrong=sockets.at(-1)!;wrong.frame({type:'ready',protocol:1});wrong.frame(badOffer);
+assert.equal(wrong.sent.length,0);
+assert.equal(bridge.getBotBridgeStatus().connected,true);
+wrong.frame(request);await new Promise(resolve=>setImmediate(resolve));assert.equal(wrong.sent.length,0);
+bridge.saveBotBridgeConfig('wss://synthetic.example','inbox-token',null);
+assert.equal(bridge.getBotBridgeBusinessStatus().businessConfigured,false);
+assert.equal(bridge.getBotBridgeStatus().configured,true);
+bridge.stopBotBridge();console.log('catalog bridge wire tests passed');}
+run().catch(e=>{console.error(e);process.exitCode=1}).finally(()=>{Module._load=original;fs.rmSync(dir,{recursive:true,force:true});});

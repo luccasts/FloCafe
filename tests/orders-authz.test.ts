@@ -10,7 +10,7 @@ const path = require('path');
 const testDir = fs.mkdtempSync(path.join(os.tmpdir(), 'flo-orders-authz-'));
 Module._load = function (request: string, parent: unknown, isMain: boolean) {
   if (request === 'electron')
-    return { app: { isPackaged: true, getPath: () => testDir, getVersion: () => 'test' } };
+    return { app: { isPackaged: true, getPath: () => testDir, getVersion: () => 'test', isReady: () => false, whenReady: () => new Promise<void>(() => {}) } };
   return originalLoad.apply(this, arguments as any);
 };
 

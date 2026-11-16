@@ -676,7 +676,7 @@ async function testOwnedServerStopEntrypoints(): Promise<void> {
         app: {
           isPackaged: true,
           getPath: () => testDir,
-          getVersion: () => 'test',
+          getVersion: () => 'test', isReady: () => false, whenReady: () => new Promise<void>(() => {}),
         },
         safeStorage: {
           isEncryptionAvailable: () => false,

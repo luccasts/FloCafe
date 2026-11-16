@@ -91,6 +91,7 @@ was rejected, so a future reader does not re-open a settled question.
 | [0003-desktop-static-export.md](decisions/0003-desktop-static-export.md) | The desktop build is a static export served by Express, with no Next.js server runtime. |
 | [0004-data-only-tax-packs.md](decisions/0004-data-only-tax-packs.md) | Country tax packs are data, never executable plugins. |
 | [0005-owner-configurable-permissions-with-fixed-context-policy.md](decisions/0005-owner-configurable-permissions-with-fixed-context-policy.md) | Permissions are owner-configurable; sensitive context-policy checks are not. |
+| [0006-business-v2-contract.md](decisions/0006-business-v2-contract.md) | Inactive opt-in contract for future bot business operations; v1 remains unchanged. |
 
 ## Operator guides
 

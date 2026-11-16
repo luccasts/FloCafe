@@ -18,7 +18,7 @@ const Module = require('module');
 const originalLoad = Module._load;
 const testDir = fs.mkdtempSync(path.join(os.tmpdir(), 'flo-restore-from-file-api-'));
 
-const mockApp = { isPackaged: true, getPath: () => testDir, getVersion: () => 'test' };
+const mockApp = { isPackaged: true, getPath: () => testDir, getVersion: () => 'test', isReady: () => false, whenReady: () => new Promise<void>(() => {}) };
 const mockSafeStorage = {
   isEncryptionAvailable: () => true,
   encryptString: (s: string) => Buffer.from(s, 'utf8'),

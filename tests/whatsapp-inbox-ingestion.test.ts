@@ -8,7 +8,7 @@ const Module = require('module');
 const originalLoad = Module._load;
 const testDir = fs.mkdtempSync(path.join(os.tmpdir(), 'flo-ingestion-'));
 Module._load = function (name: string) {
-  if (name === 'electron') return { app: { isPackaged: true, getPath: () => testDir, getVersion: () => 'test' } };
+  if (name === 'electron') return { app: { isPackaged: true, getPath: () => testDir, getVersion: () => 'test', isReady: () => false, whenReady: () => new Promise<void>(() => {}) } };
   return originalLoad.apply(this, arguments as any);
 };
 const { initTestDb, closeDatabase } = require('./helpers/test-setup');

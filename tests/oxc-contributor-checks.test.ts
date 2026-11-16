@@ -765,8 +765,9 @@ assertEqualOrThrow(
     'electron-builder install-app-deps',
     'npm run verify:electron',
     'node scripts/prepare-snap-build.cjs',
+    'node scripts/patch-dependency-privacy.cjs',
   ]),
-  'the complete Electron postinstall command sequence must stay intact',
+  'the complete Electron postinstall and dependency-privacy command sequence must stay intact',
 );
 
 // ── Changed-file formatting gate ─────────────────────────────────────────────

@@ -30,6 +30,8 @@ const devUserDataPath = process.env.FLO_DEV_USER_DATA || __dirname;
 
 // ── Mock Electron's `app` module ──────────────────────────────────────────────
 const mockApp = {
+  isReady: () => true,
+  whenReady: () => Promise.resolve(),
   isPackaged: Boolean(process.env.FLO_DEV_USER_DATA),
   getPath: (name) => {
     if (name === 'userData') return devUserDataPath;

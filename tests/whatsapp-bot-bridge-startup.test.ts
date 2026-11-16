@@ -70,7 +70,7 @@ async function run() {
     assert.equal(bridge.getBotBridgeStatus().connected, true, 'connected only after handshake');
     sockets[0].close();
     assert.equal(bridge.getBotBridgeStatus().connected, false, 'close resets connected state');
-    await new Promise<void>((resolve) => setTimeout(resolve, 1100));
+    await new Promise<void>((resolve) => setTimeout(resolve, 1300));
     assert.equal(sockets.length, 2, 'reconnects with saved authentication');
     assert.equal(sockets[1].options.headers.Authorization, `Bearer ${token}`);
     sockets[1].frame({ type: 'ready', protocol: 1 });
@@ -112,7 +112,7 @@ async function run() {
     sockets[2].frame({ type: 'ready', protocol: 1 });
     sockets[1].emit('close');
     assert.equal(bridge.getBotBridgeStatus().connected, true, 'stale close does not disconnect replacement');
-    await new Promise<void>((resolve) => setTimeout(resolve, 1100));
+    await new Promise<void>((resolve) => setTimeout(resolve, 1300));
     assert.equal(sockets.length, 3, 'stale close cannot schedule duplicate reconnect');
     bridge.stopBotBridge();
     assert.equal(bridge.getBotBridgeConfig().configured, true, 'stop retains saved authentication');

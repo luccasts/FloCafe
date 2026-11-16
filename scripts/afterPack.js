@@ -42,6 +42,7 @@ function findNativeBinaries(root) {
 
 // Arch enum from builder-util: ia32=0, x64=1, armv7l=2, arm64=3, universal=4
 module.exports = async function afterPack(context) {
+  require('./verify-dependency-privacy-package.cjs').verifyArchive(context);
   const { appOutDir, packager, arch } = context;
 
   // ── Linux: copy AppStream metainfo to standard system path ────

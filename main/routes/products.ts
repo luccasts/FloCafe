@@ -413,6 +413,20 @@ export function loadProductRelationsBatch(
   return result;
 }
 
+export function readActiveProductCatalogRows(db: ReturnType<typeof getDatabase>, maxRows?: number): any[] {
+  if (maxRows !== undefined && (!Number.isSafeInteger(maxRows) || maxRows < 1)) throw new Error('invalid_catalog_limit');
+  return db.prepare(`WITH RECURSIVE ${ACTIVE_CATEGORIES_CTE_CLAUSES} SELECT p.id, p.category_id, p.name, p.description, p.price, p.cost, p.sku, p.barcode,
+      p.sale_unit, p.allow_fractional_quantity, p.weight_precision,
+      p.inventory_product_id, p.inventory_deduction_quantity,
+      p.is_active, p.sort_order, p.track_inventory, p.stock_quantity, p.low_stock_threshold,
+      p.tax_type, p.tax_rate, p.tax_category_id, p.tax_behavior, p.cb_percent, p.tags, p.dietary_tags, p.deleted_at, p.created_at, p.updated_at,
+      CASE WHEN p.image_url IS NULL OR p.image_url = '' THEN 0 ELSE 1 END AS has_image
+      FROM products p LEFT JOIN categories c ON p.category_id = c.id AND c.deleted_at IS NULL
+      WHERE p.deleted_at IS NULL AND p.is_active = 1
+      AND (NULLIF(TRIM(p.category_id), '') IS NULL OR c.id IN (SELECT id FROM active_categories))
+      ORDER BY p.sort_order, p.name${maxRows === undefined ? '' : ' LIMIT ?'}`).all(...(maxRows === undefined ? [] : [maxRows])) as any[];
+}
+
 const VALID_TAX_BEHAVIORS = ['country_default', 'inclusive', 'exclusive', 'exempt'];
 const VALID_SALE_UNITS = ['each', 'kg', 'g', 'lb', 'ml', 'cl', 'l', 'fl oz', 'oz'] as const;
 
@@ -1240,7 +1254,8 @@ router.get('/', requirePermission('catalog.view'), (req: Request, res: Response)
 
     query += ' ORDER BY p.sort_order, p.name';
 
-    const products = db.prepare(query).all(...params);
+    const products = activeOnly && !req.query.category_id && !req.query.search && !req.query.barcode && req.query.low_stock !== 'true'
+      ? readActiveProductCatalogRows(db) : db.prepare(query).all(...params);
 
     // Batch-load relations
     const relations = loadProductRelationsBatch(db, products as any[], { includeInactiveVariants });

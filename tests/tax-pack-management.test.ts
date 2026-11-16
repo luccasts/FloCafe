@@ -16,7 +16,7 @@ Module._load = function (request: string, parent: unknown, isMain: boolean) {
       app: {
         isPackaged: true,
         getPath: () => testDir,
-        getVersion: () => '2.4.0',
+        getVersion: () => '2.4.0', isReady: () => false, whenReady: () => new Promise<void>(() => {}),
       },
     };
   }

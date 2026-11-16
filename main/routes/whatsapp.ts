@@ -11,9 +11,23 @@ import * as QRCode from 'qrcode';
 import { parsePhoneE164 } from '../lib/phone';
 import { sendHumanReplyToWhatsAppBot, WhatsAppBotReplyError } from '../whatsapp-bot-reply';
 import { clearBotBridgeConfig, configureBotBridgeOperations, getBotBridgeConfig, getBotBridgePairingStatus, getBotBridgeStatus, saveBotBridgeConfig, sendHumanReplyViaBotBridge, startBotBridge, testBotBridgeConnection } from '../services/whatsapp-bot-bridge';
+import { createCatalogPager } from '../services/catalog-bridge-page';
+import { readCatalogBridgeSnapshot } from '../services/catalog-bridge-source';
 
 const router = Router();
-configureBotBridgeOperations({ ingest: ingestWhatsAppMessage, takeover: (phone) => whatsapp.getTakeoverState(phone), isPhoneBlocked: (phone) => whatsapp.isPhoneBlocked(phone) });
+let catalogPager: ReturnType<typeof createCatalogPager> | null = null;
+let catalogPageLimit = 0;
+configureBotBridgeOperations({ ingest: ingestWhatsAppMessage, takeover: (phone) => whatsapp.getTakeoverState(phone), isPhoneBlocked: (phone) => whatsapp.isPhoneBlocked(phone),
+  catalog: (request, context, maxPayloadBytes) => {
+    if (!catalogPager || catalogPageLimit !== maxPayloadBytes) {
+      catalogPager?.clear();
+      catalogPageLimit = maxPayloadBytes;
+      catalogPager = createCatalogPager(() => readCatalogBridgeSnapshot(getDatabase()), {maxPayloadBytes});
+    }
+    return catalogPager.getPage(request,context);
+  },
+  clearCatalog: () => { catalogPager?.clear(); catalogPager = null; },
+});
 startBotBridge();
 const ownerBridge = (req: Request, res: Response, next: NextFunction) => {
   if ((req as Request & { user?: { role?: string } }).user?.role !== 'owner') return res.status(403).json({ error: 'owner_required', reason: 'owner_required' });
@@ -25,10 +39,10 @@ router.get('/bot-bridge/config', requirePermission('whatsapp.manage'), ownerBrid
 });
 
 router.post('/bot-bridge/config', requirePermission('whatsapp.manage'), ownerBridge, (req, res) => {
-  const { url, token, clear } = req.body ?? {};
+  const { url, token, clear, businessCatalog } = req.body ?? {};
   try {
     if (clear === true) clearBotBridgeConfig();
-    else saveBotBridgeConfig(url, token);
+    else saveBotBridgeConfig(url, token, businessCatalog);
     res.json({ ok: true, ...getBotBridgeConfig() });
   } catch (error) {
     const reason = error instanceof Error ? error.message : 'invalid_config';

@@ -21,7 +21,7 @@ const path = require('path');
 const testDir = fs.mkdtempSync(path.join(os.tmpdir(), 'flo-manual-tax-config-'));
 Module._load = function (request: string, parent: unknown, isMain: boolean) {
   if (request === 'electron') {
-    return { app: { isPackaged: true, getPath: () => testDir, getVersion: () => '2.9.5' } };
+    return { app: { isPackaged: true, getPath: () => testDir, getVersion: () => '2.9.5' , isReady: () => false, whenReady: () => new Promise<void>(() => {})} };
   }
   return originalLoad.apply(this, arguments as any);
 };

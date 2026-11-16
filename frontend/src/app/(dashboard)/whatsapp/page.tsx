@@ -1138,7 +1138,7 @@ export default function WhatsAppPage() {
                   <Button
                     type="button"
                     variant={effectiveConnectionChoice === 'local' ? 'default' : 'outline'}
-                    className="h-auto whitespace-normal p-4 text-left"
+                    className="h-auto whitespace-normal p-4 text-start"
                     aria-pressed={effectiveConnectionChoice === 'local'}
                     disabled={bridgeConfigured}
                     onClick={() => setConnectionChoice('local')}
@@ -1153,7 +1153,7 @@ export default function WhatsAppPage() {
                   <Button
                     type="button"
                     variant={effectiveConnectionChoice === 'bot' ? 'default' : 'outline'}
-                    className="h-auto whitespace-normal p-4 text-left"
+                    className="h-auto whitespace-normal p-4 text-start"
                     aria-pressed={effectiveConnectionChoice === 'bot'}
                     disabled={!bridgeConfigured && status?.state === 'connected'}
                     onClick={() => setConnectionChoice('bot')}
@@ -1834,7 +1834,7 @@ export default function WhatsAppPage() {
                                   setConversationHistory([]);
                                 }
                               }}
-                              className={`w-full border-b p-3 text-left transition-colors last:border-b-0 ${isSelected ? 'bg-muted/60' : 'hover:bg-muted/30'}`}
+                              className={`w-full border-b p-3 text-start transition-colors last:border-b-0 ${isSelected ? 'bg-muted/60' : 'hover:bg-muted/30'}`}
                             >
                               <div className="flex items-start justify-between gap-2">
                                 <span className="font-mono text-xs font-medium">
@@ -1956,7 +1956,7 @@ export default function WhatsAppPage() {
                             >
                               {conversationHistoryLoading ? (
                                 <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                                  <Loader2 className="mr-2 size-4 animate-spin" />
+                                  <Loader2 className="me-2 size-4 animate-spin" />
                                 </div>
                               ) : conversationHistory.length === 0 ? (
                                 <p className="py-8 text-center text-sm text-muted-foreground">
@@ -1975,7 +1975,7 @@ export default function WhatsAppPage() {
                                         {message.body}
                                       </p>
                                       <time
-                                        className={`mt-1 block text-right text-[11px] ${message.direction === 'outbound' ? 'opacity-75' : 'text-muted-foreground'}`}
+                                        className={`mt-1 block text-end text-[11px] ${message.direction === 'outbound' ? 'opacity-75' : 'text-muted-foreground'}`}
                                       >
                                         {fmt(message.queued_at)}
                                       </time>

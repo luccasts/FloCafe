@@ -22,6 +22,8 @@ const mockApp = {
   isPackaged: true,
   getPath: (_name: string) => testDir,
   getVersion: () => 'test',
+  isReady: () => false,
+  whenReady: () => new Promise<void>(() => {}),
 };
 Module._load = function (request, parent, isMain) {
   if (request === 'electron') return { app: mockApp };

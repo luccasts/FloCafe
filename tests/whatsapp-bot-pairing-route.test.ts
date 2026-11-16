@@ -3,6 +3,7 @@ const assert = require('node:assert').strict;
 const Module = require('module');
 const originalLoad = Module._load;
 let pairingStatus: any = { state: 'waiting_qr', qr: 'synthetic-one-time-qr', expiresAt: Date.now() + 20000 };
+let savedConfig: unknown[] = [];
 const pass = (_req: any, _res: any, next: () => void) => next();
 const bridge = {
   clearBotBridgeConfig: () => {},
@@ -10,7 +11,7 @@ const bridge = {
   getBotBridgeConfig: () => ({ url: null, configured: true }),
   getBotBridgePairingStatus: () => pairingStatus,
   getBotBridgeStatus: () => ({ connected: true, configured: true }),
-  saveBotBridgeConfig: () => {},
+  saveBotBridgeConfig: (...args: unknown[]) => { savedConfig = args; },
   sendHumanReplyViaBotBridge: async () => {},
   startBotBridge: () => {},
   testBotBridgeConnection: async () => true,
@@ -59,6 +60,14 @@ async function run() {
   await handler({ user: { role: 'owner' } }, response, (error: unknown) => { throw error; });
   assert.equal(body.state, 'connected', 'returns connected state');
   assert.equal(body.qrDataUrl, null, 'does not return an image after pairing');
+  const configRoute = whatsappRoutes.stack.find((item: any) => item.route?.path === '/bot-bridge/config' && item.route.methods.post);
+  const [, configOwner, configSave] = configRoute.route.stack.map((item: any) => item.handle);
+  let deniedConfig = false;
+  configOwner({user:{role:'manager'}}, {status(){deniedConfig=true;return this;},json(){return this;}},()=>{throw new Error('unauthorized_config');});
+  assert.equal(deniedConfig,true);
+  configSave({body:{url:'wss://synthetic.example',token:'synthetic-inbox',businessCatalog:{installationId:'store_1',key:'a'.repeat(64)}}},{json(value:unknown){body=value;}},()=>{});
+  assert.deepEqual(savedConfig,['wss://synthetic.example','synthetic-inbox',{installationId:'store_1',key:'a'.repeat(64)}]);
+  assert.equal(JSON.stringify(body).includes('a'.repeat(64)),false);
   console.log('whatsapp bot pairing route tests passed');
   } finally {
     Module._load = originalLoad;

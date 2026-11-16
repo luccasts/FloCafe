@@ -94,7 +94,7 @@ const fakeWhatsApp = {
 Module._load = function (request: string, parent: any, isMain: boolean) {
   if (request === 'electron') {
     return {
-      app: { isPackaged: true, getPath: () => testDir, getVersion: () => 'test' },
+      app: { isPackaged: true, getPath: () => testDir, getVersion: () => 'test', isReady: () => false, whenReady: () => new Promise<void>(() => {}) },
       safeStorage: {
         isEncryptionAvailable: () => true,
         encryptString: (value: string) => Buffer.from(value),

@@ -20,7 +20,7 @@ let kotPrintCalls: Array<{ orderId: unknown; stationName: string; itemCount: num
 Module._load = function (request: string, parent: unknown, isMain: boolean) {
   if (request === 'electron') {
     return {
-      app: { isPackaged: true, getPath: () => testDir, getVersion: () => 'test' },
+      app: { isPackaged: true, getPath: () => testDir, getVersion: () => 'test', isReady: () => false, whenReady: () => new Promise<void>(() => {}) },
       powerMonitor: { on: () => {} },
     };
   }

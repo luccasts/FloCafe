@@ -290,12 +290,12 @@ async function main(): Promise<void> {
       'duplicate startup initialization creates one socket',
     );
     assert(
-      baileysLogLines.some((line) => line.includes('Baileys warning for [redacted-number]')),
-      'Baileys warning details are retained and sanitized in diagnostics',
+      baileysLogLines.some((line) => line.includes('"code":"sdk_log"') && line.includes('"level":"warn"')),
+      'Baileys warning severity and controlled code are retained in diagnostics',
     );
     assert(
-      baileysLogLines.every((line) => !line.includes('private bill body')),
-      'Baileys diagnostics do not include logger object message bodies',
+      baileysLogLines.every((line) => !line.includes('private bill body') && !line.includes('Baileys warning for')),
+      'Baileys diagnostics omit every logger payload including interpolated messages',
     );
     holdAuthState = false;
 

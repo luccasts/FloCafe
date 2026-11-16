@@ -11,7 +11,7 @@ const testDir = fs.mkdtempSync(path.join(os.tmpdir(), 'flo-port-collision-'));
 Module._load = function (request: string, parent: unknown, isMain: boolean) {
   if (request === 'electron') {
     return {
-      app: { isPackaged: true, getPath: () => testDir, getVersion: () => 'test' },
+      app: { isPackaged: true, getPath: () => testDir, getVersion: () => 'test', isReady: () => false, whenReady: () => new Promise<void>(() => {}) },
       safeStorage: {
         isEncryptionAvailable: () => false,
         encryptString: (value: string) => Buffer.from(value),

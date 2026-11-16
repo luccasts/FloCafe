@@ -138,6 +138,8 @@ Module._load = function (request: string, parent: unknown, isMain: boolean) {
         getPath: () => testDir,
         getVersion: () => 'test',
         getName: () => 'FloCafe',
+        isReady: () => true,
+        whenReady: () => Promise.resolve(),
       },
       BrowserWindow: FakePrintWindow,
       ipcMain: {

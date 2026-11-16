@@ -1,14 +1,18 @@
 import * as assert from 'node:assert/strict';
-import { isTrustedLoopbackUrl, isTrustedMainWindowSender } from '../main/ipc';
-import {
-  createDirectUpdateIpcHandlers,
-  registerDirectUpdateIpcHandlers,
-  type DirectUpdateIpcOptions,
-} from '../main/update-ipc';
-import { createMainWindowWillNavigateHandler } from '../main/window-options';
-import { createRestartAndInstallHandler } from '../main/updater-shutdown';
-import { isAllowedLocalWindowUrl, isSafeExternalUrl } from '../main/security/url-allowlist';
+import type { DirectUpdateIpcOptions } from '../main/update-ipc';
 import type { StoredUpdateStatus, UpdateErrorPhase } from '../main/update-state';
+
+const Module = require('node:module');
+const originalLoad = Module._load;
+Module._load = function (request: string, parent: unknown, isMain: boolean) {
+  if (request === 'electron') return { app: { isReady: () => false, whenReady: () => new Promise<void>(() => {}) } };
+  return originalLoad.apply(this, arguments as any);
+};
+const { isTrustedLoopbackUrl, isTrustedMainWindowSender } = require('../main/ipc') as typeof import('../main/ipc');
+const { createDirectUpdateIpcHandlers, registerDirectUpdateIpcHandlers } = require('../main/update-ipc') as typeof import('../main/update-ipc');
+const { createMainWindowWillNavigateHandler } = require('../main/window-options') as typeof import('../main/window-options');
+const { createRestartAndInstallHandler } = require('../main/updater-shutdown') as typeof import('../main/updater-shutdown');
+const { isAllowedLocalWindowUrl, isSafeExternalUrl } = require('../main/security/url-allowlist') as typeof import('../main/security/url-allowlist');
 
 // ── Helpers & Test Doubles ──────────────────────────────────────────────────
 

@@ -1,0 +1,677 @@
+{
+  "catalog.get_page": {
+    "request": {
+      "type": "request",
+      "protocol": 2,
+      "requestId": "request-1",
+      "sessionId": "session-1",
+      "operation": "catalog.get_page",
+      "payload": {
+        "snapshotId": null,
+        "cursor": null,
+        "limit": 2
+      }
+    },
+    "response": {
+      "type": "response",
+      "protocol": 2,
+      "requestId": "request-1",
+      "sessionId": "session-1",
+      "operation": "catalog.get_page",
+      "outcome": "applied",
+      "result": {
+        "state": "page",
+        "snapshotId": "snapshot-1",
+        "revision": "revision-1",
+        "nextCursor": null,
+        "products": [
+          {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "name": "Pizza Calabresa",
+            "sku": "POLO-PIZZA-CALABRESA",
+            "categoryName": "Polo Pizza",
+            "priceCents": 1000,
+            "active": true,
+            "variants": [
+              {
+                "id": "00000000-0000-4000-8000-000000000002",
+                "name": "Grande",
+                "priceCents": 1000,
+                "active": true
+              },
+              {
+                "id": "00000000-0000-4000-8000-000000000009",
+                "name": "Média",
+                "priceCents": 800,
+                "active": true
+              }
+            ],
+            "groupIds": [
+              "00000000-0000-4000-8000-000000000005",
+              "00000000-0000-4000-8000-000000000006"
+            ]
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000008",
+            "name": "Pizza Mussarela",
+            "sku": "POLO-PIZZA-MUSSARELA",
+            "categoryName": "Polo Pizza",
+            "priceCents": 950,
+            "active": true,
+            "variants": [
+              {
+                "id": "00000000-0000-4000-8000-000000000010",
+                "name": "Grande",
+                "priceCents": 950,
+                "active": true
+              }
+            ],
+            "groupIds": [
+              "00000000-0000-4000-8000-000000000005",
+              "00000000-0000-4000-8000-000000000006"
+            ]
+          }
+        ],
+        "groups": [
+          {
+            "id": "00000000-0000-4000-8000-000000000005",
+            "name": "Bordas",
+            "active": true,
+            "required": false,
+            "minSelection": 0,
+            "maxSelection": 1,
+            "addons": [
+              {
+                "id": "00000000-0000-4000-8000-000000000003",
+                "name": "Borda catupiry",
+                "priceCents": 200,
+                "active": true
+              }
+            ]
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000006",
+            "name": "Massas",
+            "active": true,
+            "required": true,
+            "minSelection": 1,
+            "maxSelection": 1,
+            "addons": [
+              {
+                "id": "00000000-0000-4000-8000-000000000011",
+                "name": "Massa fina",
+                "priceCents": 0,
+                "active": true
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "orders.create": {
+    "request": {
+      "type": "request",
+      "protocol": 2,
+      "requestId": "request-2",
+      "sessionId": "session-1",
+      "operation": "orders.create",
+      "payload": {
+        "payloadVersion": 1,
+        "requestHash": "10c1dfa1a6e3aa504359d5890be0cfcf1eb598061dbde55ccf65ad76b9ba035c",
+        "intent": {
+          "externalOrderId": "polo-order-1",
+          "items": [
+            {
+              "productId": "00000000-0000-4000-8000-000000000001",
+              "variantId": "00000000-0000-4000-8000-000000000002",
+              "addonIds": [
+                "00000000-0000-4000-8000-000000000003"
+              ],
+              "quantity": 2,
+              "expectedUnitCents": 1200,
+              "note": "Sabores: Calabresa + Mussarela | Tamanho: Grande | Observação: bem assada"
+            }
+          ],
+          "fulfillment": {
+            "kind": "delivery",
+            "address": "Rua Exemplo sem numero",
+            "expectedDeliveryCents": 300
+          },
+          "customer": {
+            "name": "Cliente Exemplo",
+            "phoneE164": "+5511999999999"
+          },
+          "paymentSelection": {
+            "kind": "cash"
+          },
+          "expectedTotalCents": 2700,
+          "notes": "Tocar interfone ao chegar"
+        }
+      },
+      "operationId": "operation-1"
+    },
+    "response": {
+      "type": "response",
+      "protocol": 2,
+      "requestId": "request-2",
+      "sessionId": "session-1",
+      "operation": "orders.create",
+      "operationId": "operation-1",
+      "outcome": "applied",
+      "result": {
+        "state": "receipt",
+        "receipt": {
+          "operationId": "operation-1",
+          "externalOrderId": "polo-order-1",
+          "requestHash": "10c1dfa1a6e3aa504359d5890be0cfcf1eb598061dbde55ccf65ad76b9ba035c",
+          "posOrderId": "00000000-0000-4000-8000-000000000004",
+          "receiptId": "receipt-1",
+          "status": "open"
+        }
+      }
+    }
+  },
+  "orders.get_receipt": {
+    "request": {
+      "type": "request",
+      "protocol": 2,
+      "requestId": "request-3",
+      "sessionId": "session-1",
+      "operation": "orders.get_receipt",
+      "payload": {
+        "operationId": "operation-1",
+        "externalOrderId": "polo-order-1"
+      }
+    },
+    "response": {
+      "type": "response",
+      "protocol": 2,
+      "requestId": "request-3",
+      "sessionId": "session-1",
+      "operation": "orders.get_receipt",
+      "outcome": "applied",
+      "result": {
+        "state": "found",
+        "receipt": {
+          "operationId": "operation-1",
+          "externalOrderId": "polo-order-1",
+          "requestHash": "10c1dfa1a6e3aa504359d5890be0cfcf1eb598061dbde55ccf65ad76b9ba035c",
+          "posOrderId": "00000000-0000-4000-8000-000000000004",
+          "receiptId": "receipt-1",
+          "status": "open"
+        }
+      }
+    }
+  },
+  "orders.get_status": {
+    "request": {
+      "type": "request",
+      "protocol": 2,
+      "requestId": "request-4",
+      "sessionId": "session-1",
+      "operation": "orders.get_status",
+      "payload": {
+        "operationId": "operation-1",
+        "externalOrderId": "polo-order-1"
+      }
+    },
+    "response": {
+      "type": "response",
+      "protocol": 2,
+      "requestId": "request-4",
+      "sessionId": "session-1",
+      "operation": "orders.get_status",
+      "outcome": "applied",
+      "result": {
+        "state": "found",
+        "status": "open",
+        "posOrderId": "00000000-0000-4000-8000-000000000004"
+      }
+    }
+  },
+  "integration.health": {
+    "request": {
+      "type": "request",
+      "protocol": 2,
+      "requestId": "request-5",
+      "sessionId": "session-1",
+      "operation": "integration.health",
+      "payload": {}
+    },
+    "response": {
+      "type": "response",
+      "protocol": 2,
+      "requestId": "request-5",
+      "sessionId": "session-1",
+      "operation": "integration.health",
+      "outcome": "applied",
+      "result": {
+        "state": "ready",
+        "supported": [
+          "catalog.get_page",
+          "orders.create",
+          "orders.get_receipt",
+          "orders.get_status",
+          "integration.health"
+        ]
+      }
+    }
+  },
+  "outcomes": [
+    {
+      "request": {
+        "type": "request",
+        "protocol": 2,
+        "requestId": "request-2",
+        "sessionId": "session-1",
+        "operation": "orders.create",
+        "payload": {
+          "payloadVersion": 1,
+          "requestHash": "10c1dfa1a6e3aa504359d5890be0cfcf1eb598061dbde55ccf65ad76b9ba035c",
+          "intent": {
+            "externalOrderId": "polo-order-1",
+            "items": [
+              {
+                "productId": "00000000-0000-4000-8000-000000000001",
+                "variantId": "00000000-0000-4000-8000-000000000002",
+                "addonIds": [
+                  "00000000-0000-4000-8000-000000000003"
+                ],
+                "quantity": 2,
+                "expectedUnitCents": 1200,
+                "note": "Sabores: Calabresa + Mussarela | Tamanho: Grande | Observação: bem assada"
+              }
+            ],
+            "fulfillment": {
+              "kind": "delivery",
+              "address": "Rua Exemplo sem numero",
+              "expectedDeliveryCents": 300
+            },
+            "customer": {
+              "name": "Cliente Exemplo",
+              "phoneE164": "+5511999999999"
+            },
+            "paymentSelection": {
+              "kind": "cash"
+            },
+            "expectedTotalCents": 2700,
+            "notes": "Tocar interfone ao chegar"
+          }
+        },
+        "operationId": "operation-1"
+      },
+      "response": {
+        "type": "response",
+        "protocol": 2,
+        "requestId": "request-2",
+        "sessionId": "session-1",
+        "operation": "orders.create",
+        "operationId": "operation-1",
+        "outcome": "not_applied",
+        "result": null,
+        "errorCode": "validation_failed"
+      }
+    },
+    {
+      "request": {
+        "type": "request",
+        "protocol": 2,
+        "requestId": "request-2",
+        "sessionId": "session-1",
+        "operation": "orders.create",
+        "payload": {
+          "payloadVersion": 1,
+          "requestHash": "10c1dfa1a6e3aa504359d5890be0cfcf1eb598061dbde55ccf65ad76b9ba035c",
+          "intent": {
+            "externalOrderId": "polo-order-1",
+            "items": [
+              {
+                "productId": "00000000-0000-4000-8000-000000000001",
+                "variantId": "00000000-0000-4000-8000-000000000002",
+                "addonIds": [
+                  "00000000-0000-4000-8000-000000000003"
+                ],
+                "quantity": 2,
+                "expectedUnitCents": 1200,
+                "note": "Sabores: Calabresa + Mussarela | Tamanho: Grande | Observação: bem assada"
+              }
+            ],
+            "fulfillment": {
+              "kind": "delivery",
+              "address": "Rua Exemplo sem numero",
+              "expectedDeliveryCents": 300
+            },
+            "customer": {
+              "name": "Cliente Exemplo",
+              "phoneE164": "+5511999999999"
+            },
+            "paymentSelection": {
+              "kind": "cash"
+            },
+            "expectedTotalCents": 2700,
+            "notes": "Tocar interfone ao chegar"
+          }
+        },
+        "operationId": "operation-1"
+      },
+      "response": {
+        "type": "response",
+        "protocol": 2,
+        "requestId": "request-2",
+        "sessionId": "session-1",
+        "operation": "orders.create",
+        "operationId": "operation-1",
+        "outcome": "unknown",
+        "result": null,
+        "errorCode": "unavailable"
+      }
+    },
+    {
+      "request": {
+        "type": "request",
+        "protocol": 2,
+        "requestId": "request-2",
+        "sessionId": "session-1",
+        "operation": "orders.create",
+        "payload": {
+          "payloadVersion": 1,
+          "requestHash": "10c1dfa1a6e3aa504359d5890be0cfcf1eb598061dbde55ccf65ad76b9ba035c",
+          "intent": {
+            "externalOrderId": "polo-order-1",
+            "items": [
+              {
+                "productId": "00000000-0000-4000-8000-000000000001",
+                "variantId": "00000000-0000-4000-8000-000000000002",
+                "addonIds": [
+                  "00000000-0000-4000-8000-000000000003"
+                ],
+                "quantity": 2,
+                "expectedUnitCents": 1200,
+                "note": "Sabores: Calabresa + Mussarela | Tamanho: Grande | Observação: bem assada"
+              }
+            ],
+            "fulfillment": {
+              "kind": "delivery",
+              "address": "Rua Exemplo sem numero",
+              "expectedDeliveryCents": 300
+            },
+            "customer": {
+              "name": "Cliente Exemplo",
+              "phoneE164": "+5511999999999"
+            },
+            "paymentSelection": {
+              "kind": "cash"
+            },
+            "expectedTotalCents": 2700,
+            "notes": "Tocar interfone ao chegar"
+          }
+        },
+        "operationId": "operation-1"
+      },
+      "response": {
+        "type": "response",
+        "protocol": 2,
+        "requestId": "request-2",
+        "sessionId": "session-1",
+        "operation": "orders.create",
+        "operationId": "operation-1",
+        "outcome": "conflict",
+        "result": null,
+        "errorCode": "conflict"
+      }
+    },
+    {
+      "request": {
+        "type": "request",
+        "protocol": 2,
+        "requestId": "request-3",
+        "sessionId": "session-1",
+        "operation": "orders.get_receipt",
+        "payload": {
+          "operationId": "operation-1",
+          "externalOrderId": "polo-order-1"
+        }
+      },
+      "response": {
+        "type": "response",
+        "protocol": 2,
+        "requestId": "request-3",
+        "sessionId": "session-1",
+        "operation": "orders.get_receipt",
+        "outcome": "not_applied",
+        "result": {
+          "state": "not_found"
+        },
+        "errorCode": "not_found"
+      }
+    },
+    {
+      "request": {
+        "type": "request",
+        "protocol": 2,
+        "requestId": "request-3",
+        "sessionId": "session-1",
+        "operation": "orders.get_receipt",
+        "payload": {
+          "operationId": "operation-1",
+          "externalOrderId": "polo-order-1"
+        }
+      },
+      "response": {
+        "type": "response",
+        "protocol": 2,
+        "requestId": "request-3",
+        "sessionId": "session-1",
+        "operation": "orders.get_receipt",
+        "outcome": "not_applied",
+        "result": {
+          "state": "pending"
+        },
+        "errorCode": "receipt_pending"
+      }
+    },
+    {
+      "request": {
+        "type": "request",
+        "protocol": 2,
+        "requestId": "request-3",
+        "sessionId": "session-1",
+        "operation": "orders.get_receipt",
+        "payload": {
+          "operationId": "operation-1",
+          "externalOrderId": "polo-order-1"
+        }
+      },
+      "response": {
+        "type": "response",
+        "protocol": 2,
+        "requestId": "request-3",
+        "sessionId": "session-1",
+        "operation": "orders.get_receipt",
+        "outcome": "unknown",
+        "result": null,
+        "errorCode": "unavailable"
+      }
+    },
+    {
+      "request": {
+        "type": "request",
+        "protocol": 2,
+        "requestId": "request-4",
+        "sessionId": "session-1",
+        "operation": "orders.get_status",
+        "payload": {
+          "operationId": "operation-1",
+          "externalOrderId": "polo-order-1"
+        }
+      },
+      "response": {
+        "type": "response",
+        "protocol": 2,
+        "requestId": "request-4",
+        "sessionId": "session-1",
+        "operation": "orders.get_status",
+        "outcome": "not_applied",
+        "result": {
+          "state": "not_found"
+        },
+        "errorCode": "not_found"
+      }
+    },
+    {
+      "request": {
+        "type": "request",
+        "protocol": 2,
+        "requestId": "request-4",
+        "sessionId": "session-1",
+        "operation": "orders.get_status",
+        "payload": {
+          "operationId": "operation-1",
+          "externalOrderId": "polo-order-1"
+        }
+      },
+      "response": {
+        "type": "response",
+        "protocol": 2,
+        "requestId": "request-4",
+        "sessionId": "session-1",
+        "operation": "orders.get_status",
+        "outcome": "unknown",
+        "result": null,
+        "errorCode": "unavailable"
+      }
+    },
+    {
+      "request": {
+        "type": "request",
+        "protocol": 2,
+        "requestId": "request-1",
+        "sessionId": "session-1",
+        "operation": "catalog.get_page",
+        "payload": {
+          "snapshotId": null,
+          "cursor": null,
+          "limit": 2
+        }
+      },
+      "response": {
+        "type": "response",
+        "protocol": 2,
+        "requestId": "request-1",
+        "sessionId": "session-1",
+        "operation": "catalog.get_page",
+        "outcome": "not_applied",
+        "result": {
+          "state": "expired"
+        },
+        "errorCode": "snapshot_expired"
+      }
+    },
+    {
+      "request": {
+        "type": "request",
+        "protocol": 2,
+        "requestId": "request-1",
+        "sessionId": "session-1",
+        "operation": "catalog.get_page",
+        "payload": {
+          "snapshotId": null,
+          "cursor": null,
+          "limit": 2
+        }
+      },
+      "response": {
+        "type": "response",
+        "protocol": 2,
+        "requestId": "request-1",
+        "sessionId": "session-1",
+        "operation": "catalog.get_page",
+        "outcome": "unknown",
+        "result": null,
+        "errorCode": "unavailable"
+      }
+    },
+    {
+      "request": {
+        "type": "request",
+        "protocol": 2,
+        "requestId": "request-5",
+        "sessionId": "session-1",
+        "operation": "integration.health",
+        "payload": {}
+      },
+      "response": {
+        "type": "response",
+        "protocol": 2,
+        "requestId": "request-5",
+        "sessionId": "session-1",
+        "operation": "integration.health",
+        "outcome": "not_applied",
+        "result": null,
+        "errorCode": "unavailable"
+      }
+    },
+    {
+      "request": {
+        "type": "request",
+        "protocol": 2,
+        "requestId": "request-5",
+        "sessionId": "session-1",
+        "operation": "integration.health",
+        "payload": {}
+      },
+      "response": {
+        "type": "response",
+        "protocol": 2,
+        "requestId": "request-5",
+        "sessionId": "session-1",
+        "operation": "integration.health",
+        "outcome": "unknown",
+        "result": null,
+        "errorCode": "unavailable"
+      }
+    }
+  ],
+  "catalog.drink_page": {
+    "request": {
+      "type": "request",
+      "protocol": 2,
+      "requestId": "request-drink",
+      "sessionId": "session-1",
+      "operation": "catalog.get_page",
+      "payload": {
+        "snapshotId": "snapshot-1",
+        "cursor": "cursor-2",
+        "limit": 2
+      }
+    },
+    "response": {
+      "type": "response",
+      "protocol": 2,
+      "requestId": "request-drink",
+      "sessionId": "session-1",
+      "operation": "catalog.get_page",
+      "outcome": "applied",
+      "result": {
+        "state": "page",
+        "snapshotId": "snapshot-1",
+        "revision": "revision-1",
+        "nextCursor": null,
+        "products": [
+          {
+            "id": "00000000-0000-4000-8000-000000000007",
+            "name": "Refrigerante lata",
+            "sku": "POLO-BEBIDA-REFRI",
+            "categoryName": "Bebidas",
+            "priceCents": 600,
+            "active": true,
+            "variants": [],
+            "groupIds": []
+          }
+        ],
+        "groups": []
+      }
+    }
+  }
+}

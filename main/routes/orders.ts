@@ -1,4 +1,5 @@
 import { createHash } from 'crypto';
+import { reportOrderOperationalFailure } from '../lib/order-operational-privacy';
 import { Router, Request, Response } from 'express';
 import QRCode from 'qrcode';
 import {
@@ -2697,8 +2698,8 @@ router.post(
         if (result.order.customer_id) {
           try {
             syncCustomerTagCounts(db, result.order.customer_id, items);
-          } catch (err) {
-            console.error('[Orders] Tag sync failed:', err);
+          } catch {
+            console.error('[Orders] Tag sync failed', { operation: 'create', code: 'tag_sync_failed', operationCommitted: true });
           }
         }
       }
@@ -2738,8 +2739,7 @@ router.post(
         ...(qrPayload ? { qr_payload: qrPayload, qr_data_url: qrDataUrl } : {}),
       });
     } catch (error: any) {
-      console.error('[Orders] Create error:', error);
-      console.error('[API] Internal error:', error);
+      reportOrderOperationalFailure('create', error, operationCommitted);
       const statusCode = error.statusCode || 500;
       const point = operationCommitted
         ? 'fc.backend.order.create.completion'
@@ -3207,7 +3207,7 @@ router.post(
 
       res.json({ order: Object.assign({}, result.updatedOrder, { items: result.updatedItems }) });
     } catch (error: any) {
-      console.error('[API] Internal error:', error);
+      reportOrderOperationalFailure('append', error, operationCommitted);
       const statusCode = error.statusCode || 500;
       const message = error.statusCode ? error.message : 'Internal server error';
       if (statusCode === 404 && !operationCommitted)
@@ -4951,7 +4951,7 @@ const handleOrderDiscount = asyncHandler(async (req: Request, res: Response) => 
     notifyOrderUpdated();
     res.json({ order: result });
   } catch (error: any) {
-    console.error('[API] Internal error:', error);
+    reportOrderOperationalFailure('discount', error, operationCommitted);
     const statusCode = error.statusCode || 500;
     const message = error.statusCode ? error.message : 'Internal server error';
     if (statusCode === 404 && !operationCommitted)

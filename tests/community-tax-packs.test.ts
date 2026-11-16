@@ -21,7 +21,7 @@ const testSigningKeyPair = generateKeyPairSync('ed25519');
 
 Module._load = function (request: string, parent: unknown, isMain: boolean) {
   if (request === 'electron') {
-    return { app: { isPackaged: true, getPath: () => testDir, getVersion: () => floVersion } };
+    return { app: { isPackaged: true, getPath: () => testDir, getVersion: () => floVersion , isReady: () => false, whenReady: () => new Promise<void>(() => {})} };
   }
   if (
     request.includes('trusted-signing-key') &&

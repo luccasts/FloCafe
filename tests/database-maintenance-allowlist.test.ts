@@ -23,7 +23,7 @@ const originalLoad = Module._load;
 const testDir = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'flo-db-maint-allowlist-'));
 Module._load = function (request_: string, parent: unknown, isMain: boolean) {
   if (request_ === 'electron')
-    return { app: { isPackaged: true, getPath: () => testDir, getVersion: () => 'test' } };
+    return { app: { isPackaged: true, getPath: () => testDir, getVersion: () => 'test', isReady: () => false, whenReady: () => new Promise<void>(() => {}) } };
   return originalLoad.apply(this, arguments as any);
 };
 

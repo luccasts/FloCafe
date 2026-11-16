@@ -100,7 +100,7 @@ Module._load = function (request: string, parent: unknown, isMain: boolean) {
       app: {
         isPackaged: true,
         getPath: () => testDir,
-        getVersion: () => 'test',
+        getVersion: () => 'test', isReady: () => false, whenReady: () => new Promise<void>(() => {}),
         getName: () => 'FloCafe',
       },
       BrowserWindow: FakePdfBrowserWindow,
